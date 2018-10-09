@@ -41,5 +41,4 @@ class packet:
         print(vars(self))
         #https://stackoverflow.com/questions/5969806/print-all-properties-of-a-python-class
 
-
     

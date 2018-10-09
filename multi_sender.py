@@ -1,7 +1,8 @@
 import socket
 from packet import *
 import pickle
-import os # needed for size of file
+import os  # needed for size of file
+import time
 
 
 # Initialized Variables
@@ -13,21 +14,23 @@ INITIAL_SEQ = 0
 INITIAL_ACK = 0
 MSS = 150
 MWS = 600
-sender_buffer = []
-SEND_BASE = 0
-y = 0
 
 # initial timeout attributes
 InitialEstimatedRTT = 500
 InitialDevRTT = 250
 # fake file for now
 FAKE_FILE = 2300
+CONNECTION_STATE = 0 # connected or not connected to receiver
+
+timeout = 1000 #1 second initially
 
 
 def main():
-
     handshake()
+    # overall timer start here
     send_file()
+
+
 # send two packets
 # changes satte
 def handshake():
@@ -37,19 +40,37 @@ def handshake():
     send_ack(pkt2)
 
     # function that checks packets have been received ()
-    CONNECTION_STATE = "CONNECTED"
+    CONNECTION_STATE = 1
+
+
+
+
 
 def send_file():
-    print("Beginning file sending procedure procedure")
-
-    packets_to_send = generate_packets[]
+    packets_to_send = generate_packets() # returns list of packets to send
     
+    sender_buffer = []  # packets that have been sent but no ACK received yet
+
+    last_byte_acked = 0
+    last_byte_acked = 0
+
+    for pkt in packets_to_send:
+
+        if (last_byte_sent - last_byte_acked) <= MWS: # condition given in specs
+             
 
 
-# array of all the packets that have to be sent to the receiver side
+
+def update_timeout():
+
+
+
+
+
+
+
 def generate_packets():
-
-    array = []  # list 
+    array = []  # list
 
     with open("test0.pdf", "rb") as fi:
         buf = fi.read(150)
@@ -61,6 +82,8 @@ def generate_packets():
             buf = fi.read(150)
             encapsulate_data(buf, array, counter)
 
+    return array
+
 # encapsualtes the data into a packet
 # extra function needed due to conversion to bytes and stuff
 # sets the sequence number to appropriate value
@@ -71,7 +94,14 @@ def encapsulate_data(data, array, count):
     pkt.add_payload(data)  # not sure if i should pickle it first?
     array.append(pkt)
 
+
+
+
+
+
+
 # IMPORTANT FUNCTIONS
+# send data and waits for a return
 def send_data(packet):
     sender_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sender_socket.settimeout(10)
@@ -92,13 +122,19 @@ def send_data(packet):
             except:
                 # if nothing comes back
                 print ("Did not receive an ACK")
-                exit(0)
+                exit(0) # should never go here hopefully
         # if we received an ACK
         process_packet(packet)
         sender_socket.close()
     except:
         exit(0)
         pass
+
+
+
+
+
+
 
 # gets the return ACK Packet determines what to do next
 def process_packet(packet):
@@ -116,6 +152,10 @@ def process_packet(packet):
 
 
 
+
+
+
+
 # HANDSHAKE STUFF
 # sends an individual ACK without expecting a return (gotta incorporate this inside later)
 def send_ack(packet):
@@ -124,15 +164,12 @@ def send_ack(packet):
     sender_socket.settimeout(10)
     sender_socket.sendto(serialize_packet(packet), hostport)
 
-
-
 # UTILS
 def serialize_packet(packet):
     return pickle.dumps(packet)
 
 def deserialize_packet(packet):
     return pickle.loads(packet)
-
 
 
 

@@ -1,9 +1,10 @@
+
+
+"""
 import os
 
 def read():
     with open("test0.pdf", "rb") as fi:
-
-        print(os.path.getsize("test0.pdf"))
 
 
         buf = fi.read(150)
@@ -19,3 +20,13 @@ def read():
 read()
 
 
+        print(os.path.getsize("test0.pdf"))
+"""
+
+from packet import packet
+
+def main():
+    pkt = packet("ACK", 100, 200)
+    pkt.print_packet_data()
+
+main()
