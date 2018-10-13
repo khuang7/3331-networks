@@ -41,4 +41,11 @@ class packet:
         print(vars(self))
         #https://stackoverflow.com/questions/5969806/print-all-properties-of-a-python-class
 
+    def simple_print(self):
+        print("%s (%s %s)" % (self.packet_type, self.seq_num, self.ack_num))
+
+    def payload_size(self):
+        return len(self.payload)
+
+
     

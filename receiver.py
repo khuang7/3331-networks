@@ -18,16 +18,16 @@ def main():
     print ("Server is ready to receive")
 
 
-    f = open("out.pdf", "w")
-    f.write("test")
+    f = open("out.pdf", "wb")
 
     while True:
         # everytime we reach a message
+
         message, clientAddress = receiver_socket.recvfrom(2048)
-        print("type is", type(message))
-        print (message.decode('latin-1').encode("utf-8").decode("utf-8"))
-
-
+        print (message.decode("Latin-1"))
+        if (message.decode("Latin-1") == "stop"):
+            break
+        f.write(message)
         
 main()
 
