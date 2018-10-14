@@ -1,32 +1,31 @@
 
+# using queues to interact between two threads
+import threading
+import time
+from queue import *
 
-"""
-import os
+def func1(num, q):
 
-def read():
-    with open("test0.pdf", "rb") as fi:
+    while num < 100000000:
+        num = num**2
+        time.sleep(1)
+        print("putting", num)
+        q.put(num)
+
+def func2(num, q):
+
+    while num < 100000000:
+        num = q.get()
+        print (num)
+
+num = 2
+q = Queue()
+thread1 = threading.Thread(target=func1,args=(num,q))
+thread2 = threading.Thread(target=func2,args=(num,q))
+print ("setup")
 
 
-        buf = fi.read(150)
-        print ("FIRST 150 BYTES")
-        print (buf)
-        counter = 1
-        while (buf):
-            counter = counter + 1
-            buf = fi.read(150)
-            print("NEXT 150 BYTES")
-            print (buf)
-    print ("NUMBER OF PACKETS = ", counter)
-read()
+thread1.start()
+thread2.start()
 
 
-        print(os.path.getsize("test0.pdf"))
-"""
-
-from packet import packet
-
-def main():
-    pkt = packet("ACK", 100, 200)
-    pkt.print_packet_data()
-
-main()

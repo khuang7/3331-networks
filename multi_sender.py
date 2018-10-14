@@ -18,9 +18,12 @@ INITIAL_ACK = 0
 MSS = 150
 MWS = 600
 
+timeout = 1 # make it initially one
+timer_active = 0. # global variable to check the timer is on or not
+
 # initial timeout attributes
-InitialEstimatedRTT = 500
-InitialDevRTT = 250
+EstRTT = 500
+DevRTT = 250
 # fake file for now
 FAKE_FILE = 2300
 CONNECTION_STATE = 0  # connected or not connected to receiver
@@ -70,7 +73,7 @@ def send_file():
     while file_not_sent:
 
         # slowing it down to see what happens
-        time.sleep(5)
+        time.sleep(5) # debug purposes
 
         # if all the packets are known to be received on the other side
         if (full_window()):
@@ -79,12 +82,10 @@ def send_file():
         if len(packets_to_send) == 1:  # TODO: fix the way its count later
             exit(0)
 
+
         pkt = choose_packet(packets_to_send)
-
-
         thread = threading.Thread(target=send_packet, args=(pkt,))
         thread.start()
-
 
 # returns the next packet to send
 # algorithm determine what the next packet should be sent
@@ -95,7 +96,6 @@ def choose_packet(packets_to_send):
     list_of_keys = list(packets_to_send.keys())
 #    list_of_window = list(window.keys())
 #    next_seq_num = list_of_keys[0]
-
 
     # empty window
     if (not window):
@@ -127,6 +127,8 @@ def send_packet(packet):
     global last_byte_acked
     global last_byte_sent
     global done
+    global timer_active
+
     done = 1
     seq_num = packet.seq_num
     last_byte_sent = packet.seq_num
@@ -137,19 +139,24 @@ def send_packet(packet):
     serialize = serialize_packet(packet)
     sender_socket.sendto(serialize, hostport)
 
+   # timer starts
+    single_timer()
+    start = time.time()
 
     while True:
         try:
             packet, server = sender_socket.recvfrom(4096)
+            end = time.time()
             break
         except:
-            # this should only happen if somehow the packet didnt send (NOT TIME)
-            # if nothing comes back
+
+            # this area is where the packet isn't sent?
             print ("Did not receive an ACK")
             exit(0)  # should never go here hopefully
+
+    RTT = end - start  # use this value later for calculating new timeout
+    print ("RTT is ", end - start)
     process_packet(packet, seq_num)
-
-
 
 # looks at the ack number: determines what to do next
 # seq_num is what we sent initially (what it received from)
@@ -157,12 +164,15 @@ def process_packet(packet, seq_num):
     global acks_received
     global last_byte_acked
     global packets_to_send
+    global timer_active
 
     pkt = deserialize_packet(packet)
     ack_num = pkt.get_ack_num()
     pkt_type = pkt.get_packet_type()
 
     if pkt_type == "ACK":
+        if (seq_num == timer_active):
+            timer_active = 0
         if (ack_num not in acks_received):
             acks_received.append(ack_num)
             last_byte_acked = ack_num
@@ -173,15 +183,24 @@ def process_packet(packet, seq_num):
 
 
 
+
+
+
 # everytime we receive an ACK we will update the static timeout value
 def update_timeout(new_sampleRTT):
     # take RTT from previous
     # EstRTT and DevRtt are 
+    global timeout
+    global EstRTT
+    global DevRTT
+
     alpha = 0.25
     beta = 0.25
     EstRTT = (1 - alpha) * EstRTT + alpha * new_sampleRTT
     DevRTT = (1 - beta) * DevRTT + beta * (new_sampleRTT - EstimatedRTT)
-    timeout = EstRTT + 4 * DevRTT
+    timeout = (EstRTT + 4 * DevRTT) / 1000 # since we need the timeout to be in seconds
+
+
 
 
 def generate_packets():
