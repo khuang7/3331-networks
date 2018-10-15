@@ -18,7 +18,7 @@ base = 1  # expects byte stream 1 initially
 # the sequence number the receiver should receive next
 global expected_seq_num
 expected_seq_num = 0
-receiver_buffer = []  # list of packets taken from sender
+receiver_buffer = {} #contains the seq_num and payload (not packet)
 
 def main():
     # this part always waits for a connection
@@ -44,7 +44,7 @@ def handle_connection(deserialize, address):
     pkt = process_packet(deserialize)
     # serilalize the new packet to send over the socket
     pkt = serialize_packet(pkt)
-    if pkt:
+    if pkt is not None:
         newSocket.sendto(pkt, address)
 
 
@@ -55,7 +55,6 @@ def process_packet(pkt):
     global receiver_buffer
 
     seq_num = pkt.get_seq_num()
-    ack_num = pkt.get_ack_num()
     pkt_type = pkt.get_packet_type()
     # initial packet sent
 
@@ -71,14 +70,44 @@ def process_packet(pkt):
         return None
     # packet should be a data packet
     else:
-        new_packet = packet("ACK", 1, check(pkt))
-        new_packet.simple_print()
-        return new_packet
+
+        if (pkt.seq_num in receiver_buffer.keys()):
+            return None  # dont return the packet since we have it already
+        else:
+            add_to_buffer(pkt)
+            new_packet = packet("ACK", 1, get_ack_number(pkt))
+            new_packet.simple_print()
+            return new_packet
 
 
+
+# this algorithm keeps all packets received out of order packets
 # returns the appropriate ACK number
-def check(pkt):
+def get_ack_number(pkt):
     global expected_seq_num
+    global receiver_buffer
+
+    list_of_keys = receiver_buffer.keys()
+    seq_num = pkt.seq_num
+
+    # nothign in receiver buffer
+    if (not receiver_buffer):
+        return expected_seq_num
+    else:
+        # since we still need the element
+        if expected_seq_num < list_of_keys[0]:
+            return expected_seq_num
+
+        elif expected_seq_num == list_of_keys[0]:
+            sliced = list_of_keys[list_of_keys.index(expected_seq_num)]
+            for i in sliced:
+                if ()
+
+
+
+
+
+
     if (pkt.seq_num > expected_seq_num):
         return expected_seq_num
     elif (pkt.seq_num == expected_seq_num):
@@ -86,6 +115,16 @@ def check(pkt):
         return expected_seq_num
     else:
         return expected_seq_num
+
+
+def add_to_buffer(pkt):
+    global receiver_buffer
+    list_of_keys = receiver_buffer.keys()
+    if pkt.seq_num not in list_of_keys:
+        print("adding into buffer", pkt.seq_num)
+        receiver_buffer[pkt.seq_num] = pkt.payload
+
+    receiver_buffer = sorted(receiver_buffer) 
 
 
 # serelize right before sending any packet

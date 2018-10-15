@@ -6,6 +6,7 @@ import time
 import PLD
 import threading
 import collections
+from random import *
 
 
 # Initialized Variables
@@ -18,8 +19,8 @@ INITIAL_ACK = 0
 MSS = 150
 MWS = 600
 
-timeout = 1 # make it initially one
-timer_active = 0. # global variable to check the timer is on or not
+timeout = 5 # make it initially one
+timer_active = 0 # global variable to check the timer is on or not
 
 # initial timeout attributes
 EstRTT = 500
@@ -70,19 +71,31 @@ def send_file():
     # keep sending until the file is fully sent
     while file_not_sent:
         # slowing it down to see what happens
-        time.sleep(5)  # debug purposes
+        print ("+++++++++++++++++++++++++++++++++++++")
 
+
+        time.sleep(2)
+
+        print("the first window check ==", window)
         # if all the packets are known to be received on the other side
-        if (full_window()):
-            sleep(1)
+        if len(window) >= (MWS / MSS) :
+            print("window is full! WAIT PLS")
             continue
 
         if len(packets_to_send) == 1:  # TODO: fix the way its count later
             exit(0)
 
+
         pkt = choose_packet(packets_to_send)
-        thread = threading.Thread(target=send_packet, args=(pkt,))
-        thread.start()
+        PLD = randint(1, 10)
+
+        send_packet(pkt)
+        # if (PLD % 2 == 0):
+        #     print("DROP PKT\n")
+        #     drop_packet(pkt)
+        # else: 
+        #     print("SENDING NORMAL PKT\n")
+        #     send_packet(pkt)
 
 
 # this will be called as a thread that will stop when needed
@@ -95,7 +108,6 @@ def receive_packets():
             process_packet(packet)
         except:
             pass
-
 # for each ack we receive update:
 # window
 # acks received
@@ -123,6 +135,10 @@ def process_packet(packet):
 
             if (timer_active == seq_num):
                 timer_active = None
+                # activate timer for next window space if free
+                if (window):
+                    timer = threading.Thread(target=single_timer, args=(timeout, seq_num))
+                    timer.start()
     else:
         print("another packet received somehow..")
 
@@ -175,8 +191,8 @@ def drop_packet(packet):
     global timeout
 
     seq_num = packet.seq_num
+    print ("DROPPING PACKET seqnum:", seq_num)
 
-    print("is my error here?")
     window.append(seq_num)
     print("changing window", window)
     if not timer_active:
@@ -187,19 +203,29 @@ def drop_packet(packet):
 
 # sends the actual data packet
 def send_packet(packet):
+
+
     global window
     global timer_active
     global timeout
     seq_num = packet.seq_num
 
-    window.append(packet.seq_num)
+    print("TImer active before sending packet is", timer_active)
+
+    if (seq_num not in window):
+        window.append(seq_num)
+
+    if (seq_num in acks_received):
+        return
+
     print("updated window", window)
     packet.simple_print()
     serialize = serialize_packet(packet)
     sender_socket.sendto(serialize, hostport)
 
     # if the timer is not active
-    if not timer_active:
+    if timer_active is None:
+        print("activated the timer for seq_num")
         timer_active = seq_num
         timer = threading.Thread(target=single_timer, args=(timeout, seq_num))
         timer.start()
@@ -211,8 +237,7 @@ def send_packet(packet):
 # if the ack for the timer has been received already
 # then we do nothing
 def single_timer(timeout, seq_num):
-    print("timer for seqnum:", seq_num)
-    print("timer is being activated for", timeout)
+    print("timer for seqnum has started:", seq_num)
 
     time.sleep(timeout)
 
@@ -221,11 +246,16 @@ def single_timer(timeout, seq_num):
     global acks_received
     global packets_to_send
 
+    print("RESENDING PACKETS!! and TIMER RESET")
     # this ensures that the timer will only resend if the timer_active doesnt change
+
     if (seq_num == timer_active):
+        print("resending this window!", window)
         for i in window:
             if (i in packets_to_send):
+                print("resending", i)
                 send_packet(packets_to_send.get(i))
+    timer_active = None  # reset timer
 
 # everytime we receive an ACK we will update the static timeout value
 def update_timeout(new_sampleRTT):

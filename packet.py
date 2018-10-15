@@ -9,6 +9,7 @@ SYNACK = 0b0011
 FIN = 0b0100
 DATA = 0b1000
 
+
 class packet:
 
     # instantiates a new packet, sort of like a constructor in java
@@ -17,7 +18,7 @@ class packet:
         self.seq_num = seq_num
         self.ack_num = ack_num
         self.payload = None # initially its nothing
-    
+
     # getters and setters
     def set_seq_num(self, num):
         self.seq_num = num

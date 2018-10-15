@@ -4,29 +4,29 @@ import threading
 import time
 
 
-list = [1, 2]
+dict = {
+        1 : 150,
+        151 : 150,
+        301 : 150,
+        451 : 150,
+        601 : 150,
+    }
 
 
 def main():
-    global list
+    
+    expected_num = 151
+    list_of_keys = list(dict.keys())
 
-    thread = threading.Thread(target=func1)
-    thread.start()
+    print(list_of_keys)
 
-    while True:
-        time.sleep(1)
-        print(list)
+    index = list_of_keys.index(expected_num)
+    sliced = list_of_keys[index:]
 
-
-def func1():
-
-    global list
-
-    i = 2
-    while True:
-        time.sleep(1)
-        list.append(i)
-        i = i + 1
+    length = len(sliced)
+    counter = 0
+    for i in sliced:
+        
 
 
 
