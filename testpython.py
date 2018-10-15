@@ -2,30 +2,32 @@
 # using queues to interact between two threads
 import threading
 import time
-from queue import *
 
-def func1(num, q):
 
-    while num < 100000000:
-        num = num**2
+list = [1, 2]
+
+
+def main():
+    global list
+
+    thread = threading.Thread(target=func1)
+    thread.start()
+
+    while True:
         time.sleep(1)
-        print("putting", num)
-        q.put(num)
-
-def func2(num, q):
-
-    while num < 100000000:
-        num = q.get()
-        print (num)
-
-num = 2
-q = Queue()
-thread1 = threading.Thread(target=func1,args=(num,q))
-thread2 = threading.Thread(target=func2,args=(num,q))
-print ("setup")
+        print(list)
 
 
-thread1.start()
-thread2.start()
+def func1():
+
+    global list
+
+    i = 2
+    while True:
+        time.sleep(1)
+        list.append(i)
+        i = i + 1
 
 
+
+main()

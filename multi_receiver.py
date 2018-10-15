@@ -11,7 +11,7 @@ rcv_host_ip = "127.0.0.1"
 rcv_port = 5000
 hostport = (rcv_host_ip, rcv_port)
 
-receiver_buffer = []
+receiver_buffer = {}
 CONNECTION_STATE = "CLOSED"
 base = 1  # expects byte stream 1 initially
 
@@ -47,6 +47,7 @@ def handle_connection(deserialize, address):
     if pkt:
         newSocket.sendto(pkt, address)
 
+
 # returns the packet that needs to be sent back, based on what packet is given
 def process_packet(pkt):
     global expected_seq_num
@@ -70,23 +71,20 @@ def process_packet(pkt):
         return None
     # packet should be a data packet
     else:
-        receiver_buffer.append(pkt)# appends to buffer (needs a check)
         new_packet = packet("ACK", 1, check(pkt))
         new_packet.simple_print()
         return new_packet
+
 
 # returns the appropriate ACK number
 def check(pkt):
     global expected_seq_num
     if (pkt.seq_num > expected_seq_num):
-        print ("store in BUFFER deal with this later")
-        # deal with this later
         return expected_seq_num
     elif (pkt.seq_num == expected_seq_num):
         expected_seq_num = pkt.seq_num + pkt.payload_size()
         return expected_seq_num
     else:
-
         return expected_seq_num
 
 

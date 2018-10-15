@@ -31,8 +31,6 @@ CONNECTION_STATE = 0  # connected or not connected to receiver
 sender_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 acks_received = []
 window = []
-last_byte_sent = 0
-last_byte_acked = 0
 cumulative_ack = 0  # the sender know the receiver has got all bytes up to this byte stream
 packets_to_send = {}
 file_not_sent = 1
@@ -41,8 +39,6 @@ def main():
     handshake()
     # overall timer start here
     send_file()
-
-
 
 
 # send two packets
@@ -62,52 +58,108 @@ def send_file():
     # opens the file and generates all the packets that need to be sent
     global packets_to_send
     global acks_received
-    global last_byte_acked
-    global last_byte_sent
     global file_not_sent
 
     packets_to_send = generate_packets()
     print_dict_packets(packets_to_send)
 
+    # thread that constantly receives acks and changes the acks received and window
+    receiving_thread = threading.Thread(target=receive_packets)
+    receiving_thread.start()
+
     # keep sending until the file is fully sent
     while file_not_sent:
-
         # slowing it down to see what happens
-        time.sleep(5) # debug purposes
+        time.sleep(5)  # debug purposes
 
         # if all the packets are known to be received on the other side
         if (full_window()):
-            sleep(1000)
+            sleep(1)
+            continue
 
         if len(packets_to_send) == 1:  # TODO: fix the way its count later
             exit(0)
-
 
         pkt = choose_packet(packets_to_send)
         thread = threading.Thread(target=send_packet, args=(pkt,))
         thread.start()
 
+
+# this will be called as a thread that will stop when needed
+# constantly receives and does something to the packet
+def receive_packets():
+    while True:
+        try:
+            packet, server = sender_socket.recvfrom(4096)
+            print("received something")
+            process_packet(packet)
+        except:
+            pass
+
+# for each ack we receive update:
+# window
+# acks received
+# packets_to_send
+def process_packet(packet):
+    global acks_received
+    global packets_to_send
+    global timer_active
+    global window
+
+    pkt = deserialize_packet(packet)
+    ack_num = pkt.get_ack_num()
+    pkt_type = pkt.get_packet_type()
+    seq_num = ack_num - MSS  # the packet number we are acknowledging
+
+    print ("RECEIVED ACK NUM:", ack_num)
+
+    if pkt_type == "ACK":
+        if (ack_num not in acks_received):
+            acks_received.append(ack_num)
+            packets_to_send.pop(seq_num)
+            print ("updated packets to send", packets_to_send.keys())
+            window.remove(seq_num)
+            print ("updated window remove", window)
+
+            if (timer_active == seq_num):
+                timer_active = None
+    else:
+        print("another packet received somehow..")
+
+
+
+
 # returns the next packet to send
 # algorithm determine what the next packet should be sent
+
+
+
+
 def choose_packet(packets_to_send):
     global window
     global acks_received
+    global base # base of the window
 
     list_of_keys = list(packets_to_send.keys())
-#    list_of_window = list(window.keys())
-#    next_seq_num = list_of_keys[0]
 
-    # empty window
+    print("checking the window", window)
+    # if the window is empty just send first packet
     if (not window):
-        # START TIMER
-        return return_packet(list_of_keys[0], packets_to_send)
-        # send the first packet in the packets to send list
-    # this function wont be accessed if the window is full
+        print("window is EMPTY")
+        index = list_of_keys[0]
+        base = index
+        print("chooses this packet window empty")
+        packets_to_send.get(index).simple_print()
+        return packets_to_send.get(index)
+    # window contains something, so choose the first packet not in the window
     else:
-        if (not full_window()):
-            # return next available packet
-            # make a check that the last packet in window is not hte last packet
-            return return_packet(list_of_keys[-1] + 150, packets_to_send)
+        for s in list_of_keys:
+            if s not in window:
+                index = s
+                break
+        print("chooses this packet window filled")
+        packets_to_send.get(index).simple_print()
+        return packets_to_send.get(index)
 
 
 # returns true if the window is full
@@ -116,75 +168,64 @@ def full_window():
     True if (len(window) >= MWS / MSS) else False
 
 
-# returns the packet based on a key and dictionary
-def return_packet(seq_num, packets_to_send):
-    return packets_to_send[seq_num]
+# PLD = 1
+def drop_packet(packet):
+    global window
+    global timer_active
+    global timeout
 
+    seq_num = packet.seq_num
 
+    print("is my error here?")
+    window.append(seq_num)
+    print("changing window", window)
+    if not timer_active:
+        timer_active = seq_num
+        timer = threading.Thread(target=single_timer, args=(timeout, seq_num))
+        timer.start()
+        return  # exit the function
 
 # sends the actual data packet
 def send_packet(packet):
-    global last_byte_acked
-    global last_byte_sent
-    global done
+    global window
     global timer_active
-
-    done = 1
+    global timeout
     seq_num = packet.seq_num
-    last_byte_sent = packet.seq_num
+
     window.append(packet.seq_num)
     print("updated window", window)
-
     packet.simple_print()
     serialize = serialize_packet(packet)
     sender_socket.sendto(serialize, hostport)
 
-   # timer starts
-    single_timer()
-    start = time.time()
+    # if the timer is not active
+    if not timer_active:
+        timer_active = seq_num
+        timer = threading.Thread(target=single_timer, args=(timeout, seq_num))
+        timer.start()
+    else:
+        print("timer already on do nothing")
 
-    while True:
-        try:
-            packet, server = sender_socket.recvfrom(4096)
-            end = time.time()
-            break
-        except:
 
-            # this area is where the packet isn't sent?
-            print ("Did not receive an ACK")
-            exit(0)  # should never go here hopefully
+# runs a timer for timeout
+# if the ack for the timer has been received already
+# then we do nothing
+def single_timer(timeout, seq_num):
+    print("timer for seqnum:", seq_num)
+    print("timer is being activated for", timeout)
 
-    RTT = end - start  # use this value later for calculating new timeout
-    print ("RTT is ", end - start)
-    process_packet(packet, seq_num)
+    time.sleep(timeout)
 
-# looks at the ack number: determines what to do next
-# seq_num is what we sent initially (what it received from)
-def process_packet(packet, seq_num):
-    global acks_received
-    global last_byte_acked
-    global packets_to_send
     global timer_active
+    global window
+    global acks_received
+    global packets_to_send
 
-    pkt = deserialize_packet(packet)
-    ack_num = pkt.get_ack_num()
-    pkt_type = pkt.get_packet_type()
-
-    if pkt_type == "ACK":
-        if (seq_num == timer_active):
-            timer_active = 0
-        if (ack_num not in acks_received):
-            acks_received.append(ack_num)
-            last_byte_acked = ack_num
-            packets_to_send.pop(seq_num)
-            print ("updated packets to send", packets_to_send)
-            window.remove(seq_num)
-            print ("updated window", window)
-
-
-
-
-
+    # this ensures that the timer will only resend if the timer_active doesnt change
+    if (seq_num == timer_active):
+        for i in window:
+            if (i in packets_to_send):
+                send_packet(packets_to_send.get(i))
 
 # everytime we receive an ACK we will update the static timeout value
 def update_timeout(new_sampleRTT):
@@ -231,7 +272,6 @@ def encapsulate_data(data, dictionary, count):
 
 
 
-
 # IMPORTANT FUNCTIONS
 # send data and waits for a return
 def send_data(packet):
@@ -263,12 +303,15 @@ def send_ack(packet):
     sender_socket.settimeout(10)
     sender_socket.sendto(serialize_packet(packet), hostport)
 
+
 def print_dict_packets(dictionary):
     for key, value in dictionary.items():
         print ("%s --> (SEQ: %d, ACK %d)" % (key, value.seq_num, value.ack_num))
 
+
 def serialize_packet(packet):
     return pickle.dumps(packet)
+
 
 def deserialize_packet(packet):
     return pickle.loads(packet)
