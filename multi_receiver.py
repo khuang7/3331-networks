@@ -85,7 +85,8 @@ def process_packet(pkt):
     else:
 
         # this is where i do the checksum
-        if (packet.corrupt == 1):
+        if (pkt.get_corrupt() == 1):
+            print("corrupt packet send nothing back")
             return None
         elif (pkt.seq_num in receiver_buffer.keys()):
             return None  # dont return the packet since we have it already

@@ -19,9 +19,9 @@ class packet:
         self.payload = None # initially its nothing
         self.checksum = 0# should be changed to actual checksum value
 
-    # getters and setters
     def set_seq_num(self, num):
         self.seq_num = num
+
 
     def set_ack_num(self, num):
         self.ack_num = num 
@@ -38,9 +38,11 @@ class packet:
     def add_payload(self, data):
         self.payload = data
 
+    def get_payload(self):
+        return self.payload    
+
     def print_packet_data(self):
         print(vars(self))
-        #https://stackoverflow.com/questions/5969806/print-all-properties-of-a-python-class
 
     def simple_print(self):
         print("%s (%s %s)" % (self.packet_type, self.seq_num, self.ack_num))
@@ -48,5 +50,18 @@ class packet:
     def payload_size(self):
         return len(self.payload)
 
+    def get_corrupt(self):
+        return self.checksum
+
     def corrupt(self):
         self.checksum = 1  # use bits instead of a flag deal with later
+
+    def uncorrupt(self):
+        self.checksum = 0
+
+    # useful for logging
+
+
+    def list_details():
+        self.test = 0
+

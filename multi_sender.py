@@ -6,6 +6,7 @@ import threading
 import collections
 from random import *
 import random
+from logger import *
 
 
 
@@ -19,7 +20,7 @@ INITIAL_ACK = 0
 MSS = 150
 MWS = 600
 
-timeout = 1.5 # make it initially one
+timeout = 1 # make it initially one
 timer_active = None # global variable to check the timer is on or not
 
 # initial timeout attributes
@@ -36,8 +37,11 @@ cumulative_ack = 0  # the sender know the receiver has got all bytes up to this 
 packets_to_send = {}
 file_not_sent = 1
 
+log = [] # list of class logger
 
 def main():
+
+
     handshake()
     send_file()
     teardown_connection()
@@ -46,6 +50,8 @@ def main():
 # send two packets
 # changes satte
 def handshake():
+
+
     global CONNECTION_STATE
     initial_pkt = packet("SYN", 0, 0)
     send_syn(initial_pkt)
@@ -71,7 +77,7 @@ def send_file():
         # slowing it down to see what happens
         print ("+++++++++++++++++++++++++++++++++++++")
 
-        time.sleep(3)
+        time.sleep(1)
         # comapres acks_received and window, if any of acks received inside window
         # then remove it
         print ("window before updating", window)
@@ -102,10 +108,10 @@ def send_file():
         PLD = 6
         pkt = choose_packet(packets_to_send)
         if (random.uniform(0, 1) < 0.3):
-            PLD = 2
+            PLD = 6
         elif (random.uniform(0, 1) < 0.5):
             print("going to corrupt packet")
-            PLD = 3
+            PLD = 6
         else:
             PLD = 6
 
@@ -126,6 +132,7 @@ def receive_packets():
     while True:
         try:
             packet, server = sender_socket.recvfrom(4096)
+            add_to_log(packet, 0, "rcv")
             process_packet(packet)
         except:
             pass
@@ -143,20 +150,16 @@ def process_packet(packet):
     ack_num = pkt.get_ack_num()
     pkt_type = pkt.get_packet_type()
     seq_num = ack_num - MSS  # the packet number we are acknowledging
-    print ("RECEIVED ACK NUM:", ack_num)
     if pkt_type == "ACK":
         if (ack_num not in acks_received):
             acks_received.append(ack_num)
             packets_to_send.pop(seq_num)
-            print ("removed from packets_to_send", seq_num, packets_to_send.keys())
             window.remove(seq_num)
-            print ("removed from window ", seq_num, window)
 
             if (timer_active == seq_num):
                 timer_active = None
                 # activate timer for next window space if free
                 if (window):
-                    print("started a timer")
                     timer = threading.Thread(target=single_timer, args=(timeout, seq_num))
                     timer.start()
     else:
@@ -178,13 +181,11 @@ def choose_packet(packets_to_send):
 
     list_of_keys = list(packets_to_send.keys())
 
-    print("checking the window", window)
     # if the window is empty just send first packet
     if (not window):
-        print("window is EMPTY")
+
         index = list_of_keys[0]
         base = index
-        print("chooses this packet from an empty window")
         packets_to_send.get(index).simple_print()
         return packets_to_send.get(index)
     # window contains something, so choose the first packet not in the window
@@ -193,7 +194,6 @@ def choose_packet(packets_to_send):
             if s not in window:
                 index = s
                 break
-        print("chooses this packet from a full window")
         packets_to_send.get(index).simple_print()
         return packets_to_send.get(index)
 
@@ -211,12 +211,9 @@ def drop_packet(packet):
     global timeout
 
     seq_num = packet.seq_num
-    print ("DROPPING PACKET seqnum:", seq_num)
 
     window.append(seq_num)
-    print("changing window", window)
     if not timer_active:
-        print("changed timer_active to", timer_active)
         timer_active = seq_num
         timer = threading.Thread(target=single_timer, args=(timeout, seq_num))
         timer.start()
@@ -225,20 +222,21 @@ def drop_packet(packet):
 # sends the actual data packet
 def send_packet(packet, PLD):
 
+    print("PLD IS", PLD)
     if PLD == 2:
         drop_packet(packet)
         return
-
     if PLD == 3:
         packet.corrupt()
+
+    if PLD != 3:
+        packet.uncorrupt()
 
     global window
     global timer_active
     global timeout
     seq_num = packet.get_seq_num()
     payload_size = packet.payload_size()
-
-    print("TImer active before sending packet is", timer_active)
 
     if (seq_num not in window):
         window.append(seq_num)
@@ -249,17 +247,14 @@ def send_packet(packet, PLD):
     if (seq_num + payload_size in acks_received):
         return
 
-    print("updated window", window)
-    print("SENDING THIS PACKET")
-    packet.simple_print()
     serialize = serialize_packet(packet)
     sender_socket.sendto(serialize, hostport)
+    add_to_log(serialize, 0, "snd")
 
     # if the timer is not active
     print("value of timer after timeout", timer_active)
 
     if timer_active is None:
-        print("activated the timer for seq_num")
         timer_active = seq_num
         timer = threading.Thread(target=single_timer, args=(timeout, seq_num))
         timer.start()
@@ -280,20 +275,18 @@ def single_timer(timeout, seq_num):
     global acks_received
     global packets_to_send
 
-    print("RESENDING PACKETS!! and TIMER RESET")
-    print("comparing timer_active and seq_num", timer_active, seq_num)
     # this ensures that the timer will only resend if the timer_active doesnt change
 
     if (seq_num == timer_active):
-        print("resending this window!", window)
         for i in window:
             if (i in packets_to_send):
-                print("resending", i)
                 # generate a new PLD again
                 send_packet(packets_to_send.get(i), 1)
-    
+
     print("changed timer active to none")
     timer_active = None  # reset timer
+
+
 
 # everytime we receive an ACK we will update the static timeout value
 def update_timeout(new_sampleRTT):
@@ -346,12 +339,14 @@ def send_syn(packet):
     try:
         sender_socket.sendto(serialize, hostport)
         check = deserialize_packet(serialize)
-        print ("sent initially from sender:", check.get_packet_type())
+        add_to_log(serialize, 0, "snd")
         # waiting for an ack acknowledgement
         # after a certain time period of timeout (no need for handshake)
         while True:
             try:
                 packet, server = sender_socket.recvfrom(4096)
+                add_to_log(packet, 0, "rcv")
+
                 break
             except:
                 # if nothing comes back
@@ -359,24 +354,23 @@ def send_syn(packet):
                 exit(0)  # shoufld never go here hopefully
 
         if (deserialize_packet(packet).get_packet_type() == "SYNACK"):
-            print("received a synack and going to send an ack")            
-
+            send_ack(1,1) # check this later
     except:
         print("cannot establish connection")
         exit(0)
         pass
 
-    send_ack(1,1)
 
 
 # HANDSHAKE STUFF
 # sends an individual ACK without expecting a return
 def send_ack(seq_num, ack_num):
-    pkt2 = packet("ACK", seq_num, ack_num)
-    print ("sending:", pkt2.get_packet_type())
+    pkt = packet("ACK", seq_num, ack_num)
     sender_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sender_socket.settimeout(10)
-    sender_socket.sendto(serialize_packet(pkt2), hostport)
+    serialize = serialize_packet(pkt)
+    sender_socket.sendto(serialize, hostport)
+    add_to_log(serialize, 0, "send")
 
 def teardown_connection():
     pkt = packet("FIN", 10000, 1)
@@ -393,6 +387,24 @@ def serialize_packet(packet):
 
 def deserialize_packet(packet):
     return pickle.loads(packet)
+
+
+# always give thsi function a SERIALIZED PACKET
+def add_to_log(packet, time, direction):
+    global log
+    pkt = deserialize_packet(packet)
+    #def __init__(self, direction, time, type, seq_num, data_size, ack_num):
+    pkt_type = pkt.get_packet_type()
+    seq_num = pkt.get_seq_num()
+
+    if pkt.get_payload() is None:
+        data_size = 0
+    else:
+        data_size = pkt.payload_size()
+    ack_num = pkt.get_ack_num()
+    new = logger(direction, time, pkt_type, seq_num, data_size, ack_num)
+    new.print_logger()
+    log.append(new)
 
 
 # start function call
