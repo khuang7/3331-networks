@@ -19,7 +19,7 @@ base = 1  # expects byte stream 1 initially
 # the sequence number the receiver should receive next
 global expected_seq_num
 expected_seq_num = 0
-receiver_buffer = {} #contains the seq_num and payload (not packet)
+receiver_buffer = {}  #contains the seq_num and payload (not packet)
 
 def main():
     # this part always waits for a connection
@@ -51,9 +51,11 @@ def handle_connection(deserialize, address):
 
 # returns the packet that needs to be sent back, based on what packet is given
 def process_packet(pkt):
+
     global expected_seq_num
     global CONNECTION_STATE
     global receiver_buffer
+
     seq_num = pkt.get_seq_num()
     pkt_type = pkt.get_packet_type()
     # initial packet sent
@@ -72,15 +74,20 @@ def process_packet(pkt):
         CONNECTION_STATE = "OPEN"
         expected_seq_num = 1
         return None
-    
+
     # CONNECTION TEARDOWN
     elif pkt_type == "FIN":
         CONNECTION_STATE = 0
-        # convert receiver buffer to file and output
-
+        print ("FIN RECEIVED")
+        print("this is the part where i put the file together")
+        exit(0)
     # packet should be a data packet
     else:
-        if (pkt.seq_num in receiver_buffer.keys()):
+
+        # this is where i do the checksum
+        if (packet.corrupt == 1):
+            return None
+        elif (pkt.seq_num in receiver_buffer.keys()):
             return None  # dont return the packet since we have it already
         else:
 

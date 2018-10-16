@@ -1,6 +1,5 @@
 #COMP3331
 # packet.py acts as the HEADER FILE
-import pickle
 
 # consider using flags for this?
 SYN = 0b0001
@@ -18,7 +17,7 @@ class packet:
         self.seq_num = seq_num
         self.ack_num = ack_num
         self.payload = None # initially its nothing
-        self.checksum = "NO_ERROR"# should be changed to actual checksum value
+        self.checksum = 0# should be changed to actual checksum value
 
     # getters and setters
     def set_seq_num(self, num):
@@ -49,5 +48,5 @@ class packet:
     def payload_size(self):
         return len(self.payload)
 
-    def set_checksum(self):
-        self.checksum = "ERROR"
+    def corrupt(self):
+        self.checksum = 1  # use bits instead of a flag deal with later

@@ -1,12 +1,12 @@
 import socket
 from packet import *
 import pickle
-import os  # needed for size of file
 import time
-import PLD
 import threading
 import collections
 from random import *
+import random
+
 
 
 # Initialized Variables
@@ -19,7 +19,7 @@ INITIAL_ACK = 0
 MSS = 150
 MWS = 600
 
-timeout = 5 # make it initially one
+timeout = 1.5 # make it initially one
 timer_active = None # global variable to check the timer is on or not
 
 # initial timeout attributes
@@ -36,21 +36,19 @@ cumulative_ack = 0  # the sender know the receiver has got all bytes up to this 
 packets_to_send = {}
 file_not_sent = 1
 
+
 def main():
     handshake()
-    # overall timer start here
     send_file()
+    teardown_connection()
 
 
 # send two packets
 # changes satte
 def handshake():
     global CONNECTION_STATE
-    pkt1 = packet("SYN", 0, 0)
-    send_data(pkt1)
-    pkt2 = packet("ACK", 1, 1)  # i shoudl put this insdie the same functino.. do later
-    send_ack(pkt2)
-
+    initial_pkt = packet("SYN", 0, 0)
+    send_syn(initial_pkt)
     # function that checks packets have been received ()
     CONNECTION_STATE = 1
 
@@ -73,8 +71,13 @@ def send_file():
         # slowing it down to see what happens
         print ("+++++++++++++++++++++++++++++++++++++")
 
+        time.sleep(3)
+        # comapres acks_received and window, if any of acks received inside window
+        # then remove it
+        print ("window before updating", window)
+        update_window()
+        print("window after checking acks", window)
 
-        time.sleep(2) # i need this or i duno whats happening
         # if all the packets are known to be received on the other side
         if len(window) >= (MWS / MSS) :
             print("window is full! WAIT PLS")
@@ -82,14 +85,40 @@ def send_file():
 
         if len(packets_to_send) == 1:  # TODO: fix the way its count later
             print("we are going to send a fin packet and end it")
-            exit(0)
+            return
 
-
+        '''
+        PLD CODES
+        # possible outcomes
+        DROP_PACKET = 1
+        DUPLICATE = 2
+        CORRUPT = 3
+        OUT_OF_ORDER = 4
+        DELAY = 5
+        NOTHING = 6
+    
+        '''
+        # determines what will happen to the packet
+        PLD = 6
         pkt = choose_packet(packets_to_send)
-        PLD = randint(1, 10)
+        if (random.uniform(0, 1) < 0.3):
+            PLD = 2
+        elif (random.uniform(0, 1) < 0.5):
+            print("going to corrupt packet")
+            PLD = 3
+        else:
+            PLD = 6
 
-        send_packet(pkt)
+        send_packet(pkt, PLD)
 
+# ensures that the window has the right values every time (maybe i should update this more?)
+def update_window():
+    global acks_received
+    global window
+
+    for i in window:
+        if i in acks_received:
+            window.remove(i)
 
 # this will be called as a thread that will stop when needed
 # constantly receives and does something to the packet
@@ -187,19 +216,26 @@ def drop_packet(packet):
     window.append(seq_num)
     print("changing window", window)
     if not timer_active:
+        print("changed timer_active to", timer_active)
         timer_active = seq_num
         timer = threading.Thread(target=single_timer, args=(timeout, seq_num))
         timer.start()
         return  # exit the function
 
 # sends the actual data packet
-def send_packet(packet):
+def send_packet(packet, PLD):
 
+    if PLD == 2:
+        drop_packet(packet)
+        return
+
+    if PLD == 3:
+        packet.corrupt()
 
     global window
     global timer_active
     global timeout
-    seq_num = packet.seq_num
+    seq_num = packet.get_seq_num()
     payload_size = packet.payload_size()
 
     print("TImer active before sending packet is", timer_active)
@@ -214,12 +250,13 @@ def send_packet(packet):
         return
 
     print("updated window", window)
+    print("SENDING THIS PACKET")
     packet.simple_print()
     serialize = serialize_packet(packet)
     sender_socket.sendto(serialize, hostport)
 
     # if the timer is not active
-    print("value of timer is", timer_active)
+    print("value of timer after timeout", timer_active)
 
     if timer_active is None:
         print("activated the timer for seq_num")
@@ -252,7 +289,10 @@ def single_timer(timeout, seq_num):
         for i in window:
             if (i in packets_to_send):
                 print("resending", i)
-                send_packet(packets_to_send.get(i))
+                # generate a new PLD again
+                send_packet(packets_to_send.get(i), 1)
+    
+    print("changed timer active to none")
     timer_active = None  # reset timer
 
 # everytime we receive an ACK we will update the static timeout value
@@ -299,10 +339,9 @@ def encapsulate_data(data, dictionary, count):
     dictionary[seq_num] = pkt
 
 
-
 # IMPORTANT FUNCTIONS
 # send data and waits for a return
-def send_data(packet):
+def send_syn(packet):
     serialize = serialize_packet(packet)
     try:
         sender_socket.sendto(serialize, hostport)
@@ -317,20 +356,31 @@ def send_data(packet):
             except:
                 # if nothing comes back
                 print ("Did not receive an ACK")
-                exit(0)  # should never go here hopefully
+                exit(0)  # shoufld never go here hopefully
+
+        if (deserialize_packet(packet).get_packet_type() == "SYNACK"):
+            print("received a synack and going to send an ack")            
+
     except:
+        print("cannot establish connection")
         exit(0)
         pass
 
+    send_ack(1,1)
+
 
 # HANDSHAKE STUFF
-# sends an individual ACK without expecting a return (gotta incorporate this inside later)
-def send_ack(packet):
-    print ("sending:", packet.get_packet_type())
+# sends an individual ACK without expecting a return
+def send_ack(seq_num, ack_num):
+    pkt2 = packet("ACK", seq_num, ack_num)
+    print ("sending:", pkt2.get_packet_type())
     sender_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sender_socket.settimeout(10)
-    sender_socket.sendto(serialize_packet(packet), hostport)
+    sender_socket.sendto(serialize_packet(pkt2), hostport)
 
+def teardown_connection():
+    pkt = packet("FIN", 10000, 1)
+    sender_socket.sendto(serialize_packet(pkt), hostport)
 
 def print_dict_packets(dictionary):
     for key, value in dictionary.items():
