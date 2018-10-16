@@ -18,6 +18,7 @@ class packet:
         self.seq_num = seq_num
         self.ack_num = ack_num
         self.payload = None # initially its nothing
+        self.checksum = "NO_ERROR"# should be changed to actual checksum value
 
     # getters and setters
     def set_seq_num(self, num):
@@ -30,7 +31,7 @@ class packet:
         return self.seq_num
 
     def get_ack_num(self):
-        return self.ack_num
+        return self.ack_num 
 
     def get_packet_type(self):
         return self.packet_type
@@ -48,5 +49,5 @@ class packet:
     def payload_size(self):
         return len(self.payload)
 
-
-    
+    def set_checksum(self):
+        self.checksum = "ERROR"

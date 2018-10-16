@@ -20,7 +20,7 @@ MSS = 150
 MWS = 600
 
 timeout = 5 # make it initially one
-timer_active = 0 # global variable to check the timer is on or not
+timer_active = None # global variable to check the timer is on or not
 
 # initial timeout attributes
 EstRTT = 500
@@ -74,15 +74,14 @@ def send_file():
         print ("+++++++++++++++++++++++++++++++++++++")
 
 
-        time.sleep(2)
-
-        print("the first window check ==", window)
+        time.sleep(2) # i need this or i duno whats happening
         # if all the packets are known to be received on the other side
         if len(window) >= (MWS / MSS) :
             print("window is full! WAIT PLS")
             continue
 
         if len(packets_to_send) == 1:  # TODO: fix the way its count later
+            print("we are going to send a fin packet and end it")
             exit(0)
 
 
@@ -90,12 +89,6 @@ def send_file():
         PLD = randint(1, 10)
 
         send_packet(pkt)
-        # if (PLD % 2 == 0):
-        #     print("DROP PKT\n")
-        #     drop_packet(pkt)
-        # else: 
-        #     print("SENDING NORMAL PKT\n")
-        #     send_packet(pkt)
 
 
 # this will be called as a thread that will stop when needed
@@ -104,7 +97,6 @@ def receive_packets():
     while True:
         try:
             packet, server = sender_socket.recvfrom(4096)
-            print("received something")
             process_packet(packet)
         except:
             pass
@@ -122,21 +114,20 @@ def process_packet(packet):
     ack_num = pkt.get_ack_num()
     pkt_type = pkt.get_packet_type()
     seq_num = ack_num - MSS  # the packet number we are acknowledging
-
     print ("RECEIVED ACK NUM:", ack_num)
-
     if pkt_type == "ACK":
         if (ack_num not in acks_received):
             acks_received.append(ack_num)
             packets_to_send.pop(seq_num)
-            print ("updated packets to send", packets_to_send.keys())
+            print ("removed from packets_to_send", seq_num, packets_to_send.keys())
             window.remove(seq_num)
-            print ("updated window remove", window)
+            print ("removed from window ", seq_num, window)
 
             if (timer_active == seq_num):
                 timer_active = None
                 # activate timer for next window space if free
                 if (window):
+                    print("started a timer")
                     timer = threading.Thread(target=single_timer, args=(timeout, seq_num))
                     timer.start()
     else:
@@ -164,7 +155,7 @@ def choose_packet(packets_to_send):
         print("window is EMPTY")
         index = list_of_keys[0]
         base = index
-        print("chooses this packet window empty")
+        print("chooses this packet from an empty window")
         packets_to_send.get(index).simple_print()
         return packets_to_send.get(index)
     # window contains something, so choose the first packet not in the window
@@ -173,7 +164,7 @@ def choose_packet(packets_to_send):
             if s not in window:
                 index = s
                 break
-        print("chooses this packet window filled")
+        print("chooses this packet from a full window")
         packets_to_send.get(index).simple_print()
         return packets_to_send.get(index)
 
@@ -209,13 +200,17 @@ def send_packet(packet):
     global timer_active
     global timeout
     seq_num = packet.seq_num
+    payload_size = packet.payload_size()
 
     print("TImer active before sending packet is", timer_active)
 
     if (seq_num not in window):
         window.append(seq_num)
 
-    if (seq_num in acks_received):
+    # this will limit what we send (so if we know we already have an ack)
+    # we dont have to send it again
+    # seq_num is the next packet
+    if (seq_num + payload_size in acks_received):
         return
 
     print("updated window", window)
@@ -224,6 +219,8 @@ def send_packet(packet):
     sender_socket.sendto(serialize, hostport)
 
     # if the timer is not active
+    print("value of timer is", timer_active)
+
     if timer_active is None:
         print("activated the timer for seq_num")
         timer_active = seq_num
@@ -247,6 +244,7 @@ def single_timer(timeout, seq_num):
     global packets_to_send
 
     print("RESENDING PACKETS!! and TIMER RESET")
+    print("comparing timer_active and seq_num", timer_active, seq_num)
     # this ensures that the timer will only resend if the timer_active doesnt change
 
     if (seq_num == timer_active):
