@@ -14,18 +14,8 @@ class logger:
     def print_logger(self):
         print("ADDING TO LOG", vars(self))
 
+    def list_attr(self):
+    	dictionary = vars(self)
+    	return dictionary.values()
 
-
-''' 
-LIST OF EVENTS IN SENDER
-
-
-
-
-
-
-
-
-
-
-'''
+    

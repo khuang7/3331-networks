@@ -10,12 +10,7 @@ NOTHING = 6
 
 
 def PLD_gen(list):
-
-
     num = float(random.random())
-    print("random number is", num)
-
-
     print ("comparing ", num , list[0])
 
     if (num < list[0]):

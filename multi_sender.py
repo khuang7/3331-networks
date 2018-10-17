@@ -10,7 +10,7 @@ from PLD import *
 
 
 # argument check
-if len(sys.argv) != 13:
+if len(sys.argv) != 14:
     print("Usage Python sender.py receiver_host_ip \
            receiver_port file.pdf MWS MSS gammapDrop \
            pDuplicate pCorrupt pOrder maxOrder pDelay maxDelay seed")
@@ -39,7 +39,7 @@ random.seed(int(PLD_list[7]))
 
 # GLOBAL VARIABLES + Initialization
 timer_active = None # global variable to check the timer is on or not
-CONNECTION_STATE = 0  # connected or not connected to receiver
+CONNECTION_STATE = "CLOSED"  # connected or not connected to receiver
 INITIAL_SEQ = 0
 INITIAL_ACK = 0
 acks_received = []
@@ -47,6 +47,7 @@ window = []
 cumulative_ack = 0  # the sender know the receiver has got all bytes up to this byte stream
 packets_to_send = {}
 file_not_sent = 1
+last_ack_received = 0
 sender_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
 # Logger
@@ -55,9 +56,12 @@ log = []
 
 def main():
     # the main three processes of sender
-    handshake()
-    send_file()
-    teardown_connection()
+#    handshake()
+#   send_file()
+ #   teardown_connection()
+    pkt = packet("FIN", last_ack_received, 1)
+    serialize = serialize_packet(pkt)
+    sender_socket.sendto(serialize, hostport)
 
 
 def handshake():
@@ -65,7 +69,7 @@ def handshake():
     initial_pkt = packet("SYN", 0, 0)
     send_syn(initial_pkt)
     # function that checks packets have been received ()
-    CONNECTION_STATE = 1
+    CONNECTION_STATE = "ESTABLISHED"
 
 
 def send_file():
@@ -75,18 +79,19 @@ def send_file():
     global file_not_sent
 
     packets_to_send = generate_packets()
-    print_dict_packets(packets_to_send)
-
-    # thread that constantly receives acks and changes the acks received and window
-    receiving_thread = threading.Thread(target=receive_packets)
+    last_seq_num = list(packets_to_send.keys())[-1]  # when to stop the receiving thread
+    receiving_thread = threading.Thread(target=receive_packets, args = (last_seq_num, ))
     receiving_thread.start()
 
     # start the global time as soon as we start choosing to send files
     start_time = time.time()
     # keep sending until the file is fully sent
     while file_not_sent:
-        # slowing it down to see what happens
-        print ("+++++++++++++++++++++++++++++++++++++")
+
+        if len(packets_to_send) == 1:  # TODO: fix the way its count later
+            print("we are going to send a fin packet and end it")
+            # somehow stop the thread from happening
+            return # goes to close file
 
         time.sleep(2) # not sure if i can remove this :(
         # comapres acks_received and window, if any of acks received inside window
@@ -95,13 +100,8 @@ def send_file():
 
         # if all the packets are known to be received on the other side
         if len(window) >= (MWS / MSS):
-            print("window is full! WAIT PLS")
+            # window is full
             continue
-
-        if len(packets_to_send) == 0:  # TODO: fix the way its count later
-            print("we are going to send a fin packet and end it")
-            exit(0)
-            return
 
         global PLD_list
         PLD = 6 # default just incase
@@ -120,10 +120,16 @@ def update_window():
         if i in acks_received:
             window.remove(i)
 
+
 # this will be called as a thread that will stop when needed
 # constantly receives and does something to the packet
-def receive_packets():
+def receive_packets(stopper):
     while True:
+        global acks_received
+
+        if (stopper + 1 in acks_received):
+            return # stop the thread
+
         try:
             packet, server = sender_socket.recvfrom(4096)
             add_to_log(packet, 0, "rcv")
@@ -139,15 +145,17 @@ def process_packet(packet):
     global packets_to_send
     global timer_active
     global window
+    global last_ack_received
 
     pkt = deserialize_packet(packet)
     ack_num = pkt.get_ack_num()
     pkt_type = pkt.get_packet_type()
     seq_num = ack_num - MSS  # the packet number we are acknowledging
     if pkt_type == "ACK":
+        last_ack_received = ack_num
         if (ack_num not in acks_received):
             acks_received.append(ack_num)
-            packets_to_send.pop(seq_num)
+            packets_to_send.pop(seq_num) # remove packetsto_send once we know we have the ack
             window.remove(seq_num)
 
             if (timer_active == seq_num):
@@ -172,10 +180,8 @@ def choose_packet(packets_to_send):
 
     # if the window is empty just send first packet
     if (not window):
-
         index = list_of_keys[0]
         base = index
-        packets_to_send.get(index).simple_print()
         return packets_to_send.get(index)
     # window contains something, so choose the first packet not in the window
     else:
@@ -183,7 +189,6 @@ def choose_packet(packets_to_send):
             if s not in window:
                 index = s
                 break
-        packets_to_send.get(index).simple_print()
         return packets_to_send.get(index)
 
 
@@ -215,8 +220,6 @@ def drop_packet(packet):
 # sends the actual data packet
 # also passes in the PLD to determine what happens to the packet
 def send_packet(packet, PLD):
-
-    print("PLD IS", PLD)
 
     if PLD == 1:
         drop_packet(packet)
@@ -250,37 +253,23 @@ def send_packet(packet, PLD):
         timer_active = seq_num
         timer = threading.Thread(target=single_timer, args=(timeout, seq_num))
         timer.start()
-    else:
-        print("timer already on do nothing")
-
 
 # my code creates a new thread for every new timer made
 def single_timer(timeout, seq_num):
 
-    print("timer for seqnum has started:", seq_num)
     time.sleep(timeout)
 
-    # t_end = time.time() + timeout
-    # while time.time() < t_end:
-    #     print("tick tock") # FIX THIS
-
-
-
+    # acquire these variables AFTER the timer runs out
     global timer_active
     global window
     global acks_received
     global packets_to_send
-
-    print("timer for seq_num has ended")
-    print ("checking the value of timer_active and seq_num", timer_active, seq_num)
 
     if (seq_num == timer_active):
         for i in window:
             if (i in packets_to_send):
                 # generate a new PLD again
                 send_packet(packets_to_send.get(i), 6)
-
-    print("changed timer active to none")
     timer_active = None  # reset timer
 
 
@@ -312,8 +301,11 @@ def generate_packets():
         while (buf):
             counter = counter + 1
             buf = fi.read(150)
-            encapsulate_data(buf, dictionary, counter)
+            # len returns 150, sizeof returns 183... so sed
+            if (len(buf) != 0):
+                encapsulate_data(buf, dictionary, counter)
     #  try to make it such that the last byte contains a FIN flag
+
     return collections.OrderedDict(dictionary)
 
 
@@ -324,18 +316,21 @@ def encapsulate_data(data, dictionary, count):
     seq_num = count * 150 + 1
     ack_num = 1  # always 1?
     pkt = packet("DATA", seq_num, ack_num)
-    pkt.add_payload(data)  # not sure if i should pickle it first?
+    pkt.add_payload(data)
     dictionary[seq_num] = pkt
 
 
 # IMPORTANT FUNCTIONS
 # send data and waits for a return
 def send_syn(packet):
+    global CONNECTION_STATE
+
     serialize = serialize_packet(packet)
     try:
         sender_socket.sendto(serialize, hostport)
         check = deserialize_packet(serialize)
         add_to_log(serialize, 0, "snd")
+        CONNECTION_STATE = "SYN_SENT"
         # waiting for an ack acknowledgement
         # after a certain time period of timeout (no need for handshake)
         while True:
@@ -369,9 +364,60 @@ def send_ack(seq_num, ack_num):
     add_to_log(serialize, 0, "send")
 
 
+
+
+
+# TODO FIX THIS:
+
 def teardown_connection():
-    pkt = packet("FIN", 10000, 1)
-    sender_socket.sendto(serialize_packet(pkt), hostport)
+    global last_ack_received
+    global CONNECTION_STATE
+
+    pkt = packet("FIN", last_ack_received, 1)
+    serialize = serialize_packet(pkt)
+    sender_socket.sendto(serialize, hostport)
+    print("sending something")
+    CONNECTION_STATE = "FIN_WAIT_1"
+
+    while True:
+        try:
+            received, server = sender_socket.recvfrom(4096)
+            # log here
+        except:
+            print("teardown failed")
+
+        # the only thing that can arrive really is the ack
+        if received:
+            CONNECTION_STATE = "FIN_WAIT_2"
+            break
+
+    # wait for a fin from the receiver side
+    while True:
+        try:
+            takenlol, server = sender_socket.recvfrom(4096)
+            # log here
+        except:
+            print("teardown failed")
+
+        if takenlol:
+           # send_ack()
+           print ("send_ack")
+           break;
+
+    exit(0)
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 def print_dict_packets(dictionary):
@@ -409,9 +455,8 @@ def create_log():
     global log
 
     with open('sender_log.txt', 'w') as f:
-        
-
-
+        for logs in log:
+            print(logs.list_attr())
 
 # start function call
 main()
