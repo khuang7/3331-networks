@@ -9,22 +9,25 @@ DELAY = 5
 NOTHING = 6
 
 
-def PLD(pDrop, pDuplicate, pCorrupt, pOrder, maxOrder, pDelay, seed):
+def PLD_gen(list):
 
-    if (random(seed) < pDrop):
+
+    num = float(random.random())
+    print("random number is", num)
+
+
+    print ("comparing ", num , list[0])
+
+    if (num < list[0]):
         return DROP_PACKET
-    elif(random(seed) < pDuplicate):
+    elif(num < list[1]):
         return DUPLICATE
-    elif (random(seed) < pCorrupt):
+    elif (num < list[2]):
         return CORRUPT
-    elif (random(seed) < pOrder):
+    elif (num < list[3]):
         return OUT_OF_ORDER
-    elif (random(seed) < pDelay):
+    elif (num < list[5]):
         return DELAY  # determine delay value  in main
     else:
         return NOTHING
 
-# returns a random number between 0 and 1
-def random(seed):
-    random.seed(seed)
-    return random.random(0, 1)

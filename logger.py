@@ -13,3 +13,19 @@ class logger:
 
     def print_logger(self):
         print("ADDING TO LOG", vars(self))
+
+
+
+''' 
+LIST OF EVENTS IN SENDER
+
+
+
+
+
+
+
+
+
+
+'''

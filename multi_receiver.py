@@ -3,6 +3,7 @@ import socket
 import threading
 from packet import packet
 import pickle
+import sys
 
 
 ########### INITIALIZED VARIBLES ########### 
@@ -34,6 +35,7 @@ def main():
         deserialize = deserialize_packet(data)
         thread = threading.Thread(target=handle_connection, args=(deserialize, address))
         thread.start()
+
 
 
 # this function gets called every time a packet arrives from sender
@@ -144,6 +146,10 @@ def add_to_buffer(pkt):
         print("adding into buffer", pkt.seq_num)
         receiver_buffer[pkt.seq_num] = pkt.payload
         # instead of sorting it here, we sort everytime we check the list
+
+# TODO
+def buffer_to_output():
+    global filename
 
 # serelize right before sending any packet
 def serialize_packet(packet):

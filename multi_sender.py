@@ -4,54 +4,63 @@ import pickle
 import time
 import threading
 import collections
-from random import *
-import random
 from logger import *
+import sys
+from PLD import *
 
 
+# argument check
+if len(sys.argv) != 13:
+    print("Usage Python sender.py receiver_host_ip \
+           receiver_port file.pdf MWS MSS gammapDrop \
+           pDuplicate pCorrupt pOrder maxOrder pDelay maxDelay seed") 
+    # sys.exit(1)
 
-# Initialized Variables
-# Hard coded for now, add arguments later
-rcv_host_ip = "127.0.0.1"
-rcv_port = 5000
+
+# initialize all variables
+rcv_host_ip = sys.argv[1]
+rcv_port = int(sys.argv[2])
 hostport = (rcv_host_ip, rcv_port)
-INITIAL_SEQ = 0
-INITIAL_ACK = 0
-MSS = 150
-MWS = 600
-
-timeout = 1 # make it initially one
-timer_active = None # global variable to check the timer is on or not
-
-# initial timeout attributes
+filename = sys.argv[3]
+MWS = int(sys.argv[4])
+MSS = int(sys.argv[5])
+gamma = int(sys.argv[6])
 EstRTT = 500
 DevRTT = 250
-# fake file for now
-FAKE_FILE = 2300
-CONNECTION_STATE = 0  # connected or not connected to receiver
+timeout = (500 + gamma * DevRTT ) / 1000 # intially tis around a second
 
-sender_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+# Initialize PLD elements 
+PLD_list = []
+for i in range(7, 15):
+    PLD_list.append(float(sys.argv[i]))
+
+random.seed(int(PLD_list[7]))
+
+# GLOBAL VARIABLES + Initialization
+timer_active = None # global variable to check the timer is on or not
+CONNECTION_STATE = 0  # connected or not connected to receiver
+INITIAL_SEQ = 0
+INITIAL_ACK = 0
 acks_received = []
 window = []
 cumulative_ack = 0  # the sender know the receiver has got all bytes up to this byte stream
 packets_to_send = {}
 file_not_sent = 1
+sender_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-log = [] # list of class logger
+# Logger
+log = []
+
 
 def main():
-
-
+    # the main three processes of sender
     handshake()
     send_file()
     teardown_connection()
 
 
-# send two packets
-# changes satte
 def handshake():
-
-
     global CONNECTION_STATE
     initial_pkt = packet("SYN", 0, 0)
     send_syn(initial_pkt)
@@ -72,50 +81,35 @@ def send_file():
     receiving_thread = threading.Thread(target=receive_packets)
     receiving_thread.start()
 
+    # start the global time as soon as we start choosing to send files
+    start_time = time.time()
     # keep sending until the file is fully sent
     while file_not_sent:
         # slowing it down to see what happens
         print ("+++++++++++++++++++++++++++++++++++++")
 
-        time.sleep(1)
+        time.sleep(2) # not sure if i can remove this :(
         # comapres acks_received and window, if any of acks received inside window
         # then remove it
-        print ("window before updating", window)
         update_window()
-        print("window after checking acks", window)
 
         # if all the packets are known to be received on the other side
-        if len(window) >= (MWS / MSS) :
+        if len(window) >= (MWS / MSS):
             print("window is full! WAIT PLS")
             continue
 
-        if len(packets_to_send) == 1:  # TODO: fix the way its count later
+        if len(packets_to_send) == 0:  # TODO: fix the way its count later
             print("we are going to send a fin packet and end it")
+            exit(0)
             return
 
-        '''
-        PLD CODES
-        # possible outcomes
-        DROP_PACKET = 1
-        DUPLICATE = 2
-        CORRUPT = 3
-        OUT_OF_ORDER = 4
-        DELAY = 5
-        NOTHING = 6
-    
-        '''
-        # determines what will happen to the packet
-        PLD = 6
-        pkt = choose_packet(packets_to_send)
-        if (random.uniform(0, 1) < 0.3):
-            PLD = 6
-        elif (random.uniform(0, 1) < 0.5):
-            print("going to corrupt packet")
-            PLD = 6
-        else:
-            PLD = 6
+        global PLD_list
+        PLD = 6 # default just incase
+        PLD = PLD_gen(PLD_list)
 
+        pkt = choose_packet(packets_to_send)
         send_packet(pkt, PLD)
+
 
 # ensures that the window has the right values every time (maybe i should update this more?)
 def update_window():
@@ -209,28 +203,35 @@ def drop_packet(packet):
     global window
     global timer_active
     global timeout
+    global log
 
     seq_num = packet.seq_num
-
     window.append(seq_num)
+
+    serialize = serialize_packet(packet)
+    add_to_log(serialize, 0, "drop")
+
     if not timer_active:
         timer_active = seq_num
         timer = threading.Thread(target=single_timer, args=(timeout, seq_num))
         timer.start()
         return  # exit the function
 
+
 # sends the actual data packet
+# also passes in the PLD to determine what happens to the packet
 def send_packet(packet, PLD):
 
     print("PLD IS", PLD)
-    if PLD == 2:
+
+    if PLD == 1:
         drop_packet(packet)
         return
     if PLD == 3:
         packet.corrupt()
 
     if PLD != 3:
-        packet.uncorrupt()
+        packet.uncorrupt()  # refactor this later
 
     global window
     global timer_active
@@ -251,9 +252,6 @@ def send_packet(packet, PLD):
     sender_socket.sendto(serialize, hostport)
     add_to_log(serialize, 0, "snd")
 
-    # if the timer is not active
-    print("value of timer after timeout", timer_active)
-
     if timer_active is None:
         timer_active = seq_num
         timer = threading.Thread(target=single_timer, args=(timeout, seq_num))
@@ -262,30 +260,34 @@ def send_packet(packet, PLD):
         print("timer already on do nothing")
 
 
-# runs a timer for timeout
-# if the ack for the timer has been received already
-# then we do nothing
+# my code creates a new thread for every new timer made
 def single_timer(timeout, seq_num):
+    
     print("timer for seqnum has started:", seq_num)
+    #time.sleep(timeout)
 
-    time.sleep(timeout)
+    t_end = time.time() + timeout
+    while time.time() < t_end:
+        print("tick tock") # FIX THIS
+        
+
 
     global timer_active
     global window
     global acks_received
     global packets_to_send
 
-    # this ensures that the timer will only resend if the timer_active doesnt change
+    print("timer for seq_num has ended")
+    print ("checking the value of timer_active and seq_num", timer_active, seq_num)
 
     if (seq_num == timer_active):
         for i in window:
             if (i in packets_to_send):
                 # generate a new PLD again
-                send_packet(packets_to_send.get(i), 1)
+                send_packet(packets_to_send.get(i), 6)
 
     print("changed timer active to none")
     timer_active = None  # reset timer
-
 
 
 # everytime we receive an ACK we will update the static timeout value
@@ -405,6 +407,9 @@ def add_to_log(packet, time, direction):
     new = logger(direction, time, pkt_type, seq_num, data_size, ack_num)
     new.print_logger()
     log.append(new)
+
+
+
 
 
 # start function call
