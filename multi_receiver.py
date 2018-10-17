@@ -146,7 +146,6 @@ def add_to_buffer(pkt):
         print("adding into buffer", pkt.seq_num)
         receiver_buffer[pkt.seq_num] = pkt.payload
         # instead of sorting it here, we sort everytime we check the list
-
 # TODO
 def buffer_to_output():
     global filename

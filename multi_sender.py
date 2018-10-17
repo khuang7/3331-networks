@@ -13,7 +13,7 @@ from PLD import *
 if len(sys.argv) != 13:
     print("Usage Python sender.py receiver_host_ip \
            receiver_port file.pdf MWS MSS gammapDrop \
-           pDuplicate pCorrupt pOrder maxOrder pDelay maxDelay seed") 
+           pDuplicate pCorrupt pOrder maxOrder pDelay maxDelay seed")
     # sys.exit(1)
 
 
@@ -30,7 +30,7 @@ DevRTT = 250
 timeout = (500 + gamma * DevRTT ) / 1000 # intially tis around a second
 
 
-# Initialize PLD elements 
+# Initialize PLD elements
 PLD_list = []
 for i in range(7, 15):
     PLD_list.append(float(sys.argv[i]))
@@ -159,13 +159,8 @@ def process_packet(packet):
     else:
         print("another packet received somehow..")
 
-
-
-
 # returns the next packet to send
 # algorithm determine what the next packet should be sent
-
-
 
 
 def choose_packet(packets_to_send):
@@ -196,7 +191,6 @@ def choose_packet(packets_to_send):
 def full_window():
     global window
     True if (len(window) >= MWS / MSS) else False
-
 
 # PLD = 1
 def drop_packet(packet):
@@ -262,14 +256,14 @@ def send_packet(packet, PLD):
 
 # my code creates a new thread for every new timer made
 def single_timer(timeout, seq_num):
-    
-    print("timer for seqnum has started:", seq_num)
-    #time.sleep(timeout)
 
-    t_end = time.time() + timeout
-    while time.time() < t_end:
-        print("tick tock") # FIX THIS
-        
+    print("timer for seqnum has started:", seq_num)
+    time.sleep(timeout)
+
+    # t_end = time.time() + timeout
+    # while time.time() < t_end:
+    #     print("tick tock") # FIX THIS
+
 
 
     global timer_active
@@ -293,7 +287,7 @@ def single_timer(timeout, seq_num):
 # everytime we receive an ACK we will update the static timeout value
 def update_timeout(new_sampleRTT):
     # take RTT from previous
-    # EstRTT and DevRtt are 
+    # EstRTT and DevRtt are
     global timeout
     global EstRTT
     global DevRTT
@@ -374,9 +368,11 @@ def send_ack(seq_num, ack_num):
     sender_socket.sendto(serialize, hostport)
     add_to_log(serialize, 0, "send")
 
+
 def teardown_connection():
     pkt = packet("FIN", 10000, 1)
     sender_socket.sendto(serialize_packet(pkt), hostport)
+
 
 def print_dict_packets(dictionary):
     for key, value in dictionary.items():
@@ -409,6 +405,11 @@ def add_to_log(packet, time, direction):
     log.append(new)
 
 
+def create_log():
+    global log
+
+    with open('sender_log.txt', 'w') as f:
+        
 
 
 
