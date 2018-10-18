@@ -4,22 +4,27 @@ import sys
 import random
 import time
 
+start_time = None
 
-def test_rand():
 
-    rand_gen = random.random()  
-    return rand_gen
+def func1():
+	global start_time
+	print (start_time)
+	timestamp = time.time()
+
+	print (start_time-timestamp)
+
 
 
 def main():
-    random.seed(3)
-    while True:
-        time.sleep(0.5)
-        print(test_rand())
+	global start_time
+	start_time = time.time()
+	i = 0
+	while i < 1000:
+		i = i + 1
+
+	func1()
 main()
-
-
-
 
 
 '''

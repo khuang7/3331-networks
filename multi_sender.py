@@ -9,13 +9,13 @@ import sys
 from PLD import *
 
 
-# argument check
-if len(sys.argv) != 14:
-    print("Usage Python sender.py receiver_host_ip \
-           receiver_port file.pdf MWS MSS gammapDrop \
-           pDuplicate pCorrupt pOrder maxOrder pDelay maxDelay seed")
-    # sys.exit(1)
+print(len(sys.argv))
 
+if len(sys.argv) != 15:
+    print("Usage Python sender.py receiver_host_ip \
+           receiver_port file.pdf MWS MSS gamma pDrop \
+           pDuplicate pCorrupt pOrder maxOrder pDelay maxDelay seed")
+    sys.exit(1)
 
 # initialize all variables
 rcv_host_ip = sys.argv[1]
@@ -28,7 +28,6 @@ gamma = int(sys.argv[6])
 EstRTT = 500
 DevRTT = 250
 timeout = (500 + gamma * DevRTT ) / 1000 # intially tis around a second
-
 
 # Initialize PLD elements
 PLD_list = []
@@ -44,25 +43,25 @@ INITIAL_SEQ = 0
 INITIAL_ACK = 0
 acks_received = []
 window = []
-cumulative_ack = 0  # the sender know the receiver has got all bytes up to this byte stream
 packets_to_send = {}
 file_not_sent = 1
 last_ack_received = 0
+last_data_byte_stream = 9999 # dummy number
 sender_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
 
 # Logger
 log = []
+overall_timer = None
 
 
 def main():
+    global overall_timer
     # the main three processes of sender
-#    handshake()
-#   send_file()
- #   teardown_connection()
-    pkt = packet("FIN", last_ack_received, 1)
-    serialize = serialize_packet(pkt)
-    sender_socket.sendto(serialize, hostport)
-
+    handshake()
+    overall_timer = time.time()
+    send_file()
+    teardown_connection()
 
 def handshake():
     global CONNECTION_STATE
@@ -77,38 +76,38 @@ def send_file():
     global packets_to_send
     global acks_received
     global file_not_sent
+    global last_data_byte_stream
 
     packets_to_send = generate_packets()
-    last_seq_num = list(packets_to_send.keys())[-1]  # when to stop the receiving thread
-    receiving_thread = threading.Thread(target=receive_packets, args = (last_seq_num, ))
+    number_of_pkts = len(packets_to_send.keys())
+    last_seq_num = list(packets_to_send.keys())[-1]
+    last_data_byte_stream = last_seq_num + packets_to_send.get(last_seq_num).payload_size()
+
+    receiving_thread = threading.Thread(target=receive_packets, args = (last_data_byte_stream, ))
     receiving_thread.start()
 
-    # start the global time as soon as we start choosing to send files
-    start_time = time.time()
+
     # keep sending until the file is fully sent
     while file_not_sent:
+        print ("Beginning loop with")
+        print_dict_packets(packets_to_send)
 
-        if len(packets_to_send) == 1:  # TODO: fix the way its count later
-            print("we are going to send a fin packet and end it")
-            # somehow stop the thread from happening
+        if not packets_to_send:  # TODO: fix the way its count later
+            print("FINISHED")
             return # goes to close file
-
         time.sleep(2) # not sure if i can remove this :(
-        # comapres acks_received and window, if any of acks received inside window
-        # then remove it
         update_window()
 
-        # if all the packets are known to be received on the other side
         if len(window) >= (MWS / MSS):
-            # window is full
+            print("Full window")
             continue
 
         global PLD_list
-        PLD = 6 # default just incase
+        PLD = 6  # default just incase
         PLD = PLD_gen(PLD_list)
-
         pkt = choose_packet(packets_to_send)
-        send_packet(pkt, PLD)
+        if pkt is not None:
+            send_packet(pkt, PLD)
 
 
 # ensures that the window has the right values every time (maybe i should update this more?)
@@ -124,15 +123,23 @@ def update_window():
 # this will be called as a thread that will stop when needed
 # constantly receives and does something to the packet
 def receive_packets(stopper):
+
+
     while True:
+        print ("stops when acks received contains this", stopper)
         global acks_received
+        global packets_to_send
+        print ("inside thread, acks received is", acks_received)
 
-        if (stopper + 1 in acks_received):
-            return # stop the thread
+        if (stopper in acks_received):
+            print("the thread should have stopped now")
+            return  # stop the thread
 
+        if packets_to_send is None:
+            return
         try:
             packet, server = sender_socket.recvfrom(4096)
-            add_to_log(packet, 0, "rcv")
+            add_to_log(packet, "rcv")
             process_packet(packet)
         except:
             pass
@@ -146,17 +153,27 @@ def process_packet(packet):
     global timer_active
     global window
     global last_ack_received
+    global last_data_byte_stream
 
     pkt = deserialize_packet(packet)
     ack_num = pkt.get_ack_num()
     pkt_type = pkt.get_packet_type()
-    seq_num = ack_num - MSS  # the packet number we are acknowledging
+    # need to consider edge case (last packet will be a different size)
+    if (ack_num == last_data_byte_stream):
+        pop_off = list(packets_to_send.keys())[-1] # hardcoded
+    else:
+        pop_off = ack_num - MSS  # the packet number we are acknowledging
+    print("within received thread i get this")
+    pkt.simple_print()
+
     if pkt_type == "ACK":
         last_ack_received = ack_num
         if (ack_num not in acks_received):
+            print("popping of seq_num", pop_off)
+            print("acks received", ack_num)
             acks_received.append(ack_num)
-            packets_to_send.pop(seq_num) # remove packetsto_send once we know we have the ack
-            window.remove(seq_num)
+            packets_to_send.pop(pop_off) # remove packetsto_send once we know we have the ack
+            window.remove(pop_off)
 
             if (timer_active == seq_num):
                 timer_active = None
@@ -165,13 +182,19 @@ def process_packet(packet):
                     timer = threading.Thread(target=single_timer, args=(timeout, seq_num))
                     timer.start()
     else:
-        print("another packet received somehow..")
+        pass
 
 # returns the next packet to send
 # algorithm determine what the next packet should be sent
 
 
 def choose_packet(packets_to_send):
+
+    print ("chooses a packet to send")
+    if (not packets_to_send):
+        print("the list is empty")
+        return None
+
     global window
     global acks_received
     global base # base of the window
@@ -180,11 +203,14 @@ def choose_packet(packets_to_send):
 
     # if the window is empty just send first packet
     if (not window):
+        print ("window is empty so chooses the first thing in packets to send")
         index = list_of_keys[0]
+        print ("chooses packet at index", index)
         base = index
         return packets_to_send.get(index)
     # window contains something, so choose the first packet not in the window
     else:
+        print ("window is full, choses the first index which doesnt exist in window")
         for s in list_of_keys:
             if s not in window:
                 index = s
@@ -204,11 +230,13 @@ def drop_packet(packet):
     global timeout
     global log
 
+    print ("Drop a packet")
+
     seq_num = packet.seq_num
     window.append(seq_num)
 
     serialize = serialize_packet(packet)
-    add_to_log(serialize, 0, "drop")
+    add_to_log(serialize, "drop")
 
     if not timer_active:
         timer_active = seq_num
@@ -245,9 +273,12 @@ def send_packet(packet, PLD):
     if (seq_num + payload_size in acks_received):
         return
 
+    print ("going to send packet:") 
+    packet.simple_print()
+
     serialize = serialize_packet(packet)
     sender_socket.sendto(serialize, hostport)
-    add_to_log(serialize, 0, "snd")
+    add_to_log(serialize, "snd")
 
     if timer_active is None:
         timer_active = seq_num
@@ -324,19 +355,18 @@ def encapsulate_data(data, dictionary, count):
 # send data and waits for a return
 def send_syn(packet):
     global CONNECTION_STATE
-
     serialize = serialize_packet(packet)
     try:
         sender_socket.sendto(serialize, hostport)
         check = deserialize_packet(serialize)
-        add_to_log(serialize, 0, "snd")
+        add_to_log(serialize, "snd")
         CONNECTION_STATE = "SYN_SENT"
         # waiting for an ack acknowledgement
         # after a certain time period of timeout (no need for handshake)
         while True:
             try:
                 packet, server = sender_socket.recvfrom(4096)
-                add_to_log(packet, 0, "rcv")
+                add_to_log(packet, "rcv")
 
                 break
             except:
@@ -352,7 +382,6 @@ def send_syn(packet):
         pass
 
 
-
 # HANDSHAKE STUFF
 # sends an individual ACK without expecting a return
 def send_ack(seq_num, ack_num):
@@ -361,7 +390,7 @@ def send_ack(seq_num, ack_num):
     sender_socket.settimeout(10)
     serialize = serialize_packet(pkt)
     sender_socket.sendto(serialize, hostport)
-    add_to_log(serialize, 0, "send")
+    add_to_log(serialize, "send")
 
 
 
@@ -376,8 +405,9 @@ def teardown_connection():
     pkt = packet("FIN", last_ack_received, 1)
     serialize = serialize_packet(pkt)
     sender_socket.sendto(serialize, hostport)
-    print("sending something")
+    print("sending a FIN")
     CONNECTION_STATE = "FIN_WAIT_1"
+
 
     while True:
         try:
@@ -386,36 +416,16 @@ def teardown_connection():
         except:
             print("teardown failed")
 
-        # the only thing that can arrive really is the ack
         if received:
-            CONNECTION_STATE = "FIN_WAIT_2"
-            break
+            add_to_log(received, "rcv")
+            rcv = deserialize_packet(received)
 
-    # wait for a fin from the receiver side
-    while True:
-        try:
-            takenlol, server = sender_socket.recvfrom(4096)
-            # log here
-        except:
-            print("teardown failed")
-
-        if takenlol:
-           # send_ack()
-           print ("send_ack")
-           break;
-
-    exit(0)
-
-
-
-
-
-
-
-
-
-
-
+            if rcv.get_packet_type() == "FIN":
+                send_ack(1 , 1)
+                print ('FINISHED')
+                create_log()
+                exit(0)
+                break
 
 
 
@@ -434,20 +444,33 @@ def deserialize_packet(packet):
 
 
 # always give thsi function a SERIALIZED PACKET
-def add_to_log(packet, time, direction):
+def add_to_log(packet, direction):
+    global overall_timer
     global log
+    global timestamp
+
+
     pkt = deserialize_packet(packet)
     #def __init__(self, direction, time, type, seq_num, data_size, ack_num):
     pkt_type = pkt.get_packet_type()
     seq_num = pkt.get_seq_num()
+
+
+    # don't include handshake in the time
+    if not overall_timer:
+        total_time = 0
+    else: 
+
+        timestamp = time.time()
+        total_time = timestamp - overall_timer
 
     if pkt.get_payload() is None:
         data_size = 0
     else:
         data_size = pkt.payload_size()
     ack_num = pkt.get_ack_num()
-    new = logger(direction, time, pkt_type, seq_num, data_size, ack_num)
-    new.print_logger()
+    new = logger(direction, total_time, pkt_type, seq_num, data_size, ack_num)
+#    new.print_logger()
     log.append(new)
 
 
@@ -456,7 +479,7 @@ def create_log():
 
     with open('sender_log.txt', 'w') as f:
         for logs in log:
-            print(logs.list_attr())
+            f.write("%s\n" % logs)
 
 # start function call
 main()

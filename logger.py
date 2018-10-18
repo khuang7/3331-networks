@@ -14,8 +14,7 @@ class logger:
     def print_logger(self):
         print("ADDING TO LOG", vars(self))
 
+    # returns a list of the attribute values
     def list_attr(self):
-    	dictionary = vars(self)
-    	return dictionary.values()
-
-    
+        dictionary = vars(self)
+        return dictionary.values()

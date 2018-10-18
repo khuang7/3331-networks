@@ -11,8 +11,6 @@ NOTHING = 6
 
 def PLD_gen(list):
     num = float(random.random())
-    print ("comparing ", num , list[0])
-
     if (num < list[0]):
         return DROP_PACKET
     elif(num < list[1]):
@@ -25,4 +23,3 @@ def PLD_gen(list):
         return DELAY  # determine delay value  in main
     else:
         return NOTHING
-

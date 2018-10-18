@@ -4,60 +4,79 @@ import threading
 from packet import packet
 import pickle
 import sys
+import time
 
+# argument check
+if len(sys.argv) != 3:
+    print("Usage Python receiver.py, receiver_port, file_r.pdf")
+    sys.exit(1)
 
-########### INITIALIZED VARIBLES ########### 
-# Hard coded for now, add arguments later
-
-
+# initialize variables
 rcv_host_ip = "127.0.0.1"
-rcv_port = 5000
+rcv_port = int(sys.argv[1])
 hostport = (rcv_host_ip, rcv_port)
-address = ""
+filename = sys.argv[2]
 
+# GLOBAL VARIABLES
 receiver_buffer = {}
 CONNECTION_STATE = "CLOSED"
-base = 1  # expects byte stream 1 initially
-
-
-# the sequence number the receiver should receive next
-global expected_seq_num
 expected_seq_num = 0
 receiver_buffer = {}  #contains the seq_num and payload (not packet)
+receiver_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) # this should mess it up?
+receiver_socket.bind(hostport)
+
+# Logger
+log = []
+
 
 def main():
-    # this part always waits for a connection
-
-    receiver_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) 
-    receiver_socket.bind(hostport)
-    # always wait for a connection
-    # start a new thread if a connection comes
-
     while True:
         data, address = receiver_socket.recvfrom(4000)
         deserialize = deserialize_packet(data)
-        thread = threading.Thread(target=handle_connection, args=(deserialize, address))
-        thread.start()
+
+        if deserialize.get_packet_type() != "FIN":
+            thread = threading.Thread(target=handle_connection, args=(deserialize, address))
+            thread.start()
+        else:  # FIN has been received
+            # maybe i should thread this as well
+            finish_connection(deserialize, address)
+            break
 
 
 # this function gets called every time a packet arrives from sender
 def handle_connection(deserialize, address):
-    # get the data from outside
     newSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-   
-    # receives a SYN, ACK or DATA
-    # returns the appropriate packet to send back
     pkt = process_packet(deserialize)
-    # serilalize the new packet to send over the socket
-
     if pkt is not None:
         pkt = serialize_packet(pkt)
         newSocket.sendto(pkt, address)
 
 
-# returns the packet that needs to be sent back, based on what packet is given
-def process_packet(pkt):
+# we have to send two packets in a row
+# packet given here is already deserialized
+# sort of hard coded
+def finish_connection(deserialize, address):
+    newSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    seq_num = deserialize.get_seq_num()
 
+    ACK = packet("ACK", 1, seq_num + 1)
+    FIN = packet("FIN", seq_num + 1, 1)
+
+    newSocket.sendto(serialize_packet(ACK), address)
+    time.sleep(2)
+    newSocket.sendto(serialize_packet(FIN), address)
+
+    while True:
+        data, address = receiver_socket.recvfrom(4000)
+        deserialize = deserialize_packet(data)
+        convert_buffer_to_file()
+        break
+
+    print("FINISHED")
+    sys.exit(0)
+
+# creates a packet 
+def process_packet(pkt):
     global expected_seq_num
     global CONNECTION_STATE
     global receiver_buffer
@@ -80,27 +99,6 @@ def process_packet(pkt):
         CONNECTION_STATE = "OPEN"
         expected_seq_num = 1
         return None
-
-    # CONNECTION TEARDOWN
-    elif pkt_type == "FIN":
-
-        print("looping here?")
-        newSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-
-        pkt1 = packet("ACK", 0, seq_num + 1)
-        print ("sending a ACK reply to FIN")
-        newSocket.sendto(serialize_packet(pkt1), )  # FIX HERE
-
-        print ("sending a FIN as well")
-        pkt = packet("FIN", seq_num + 1, 0)
-        newSocket.sendto(serialize_packet(pkt), hostport)  # FIX HERE!!!
-
-        quit()
-
-        #convertBufferToFile(
-        return None
-
-
     # packet should be a data packet
     else:
         # this is where i do the checksum
@@ -123,11 +121,12 @@ def process_packet(pkt):
             return new_packet
 
 
-# constantly ensures that hte expected seq num is updated
+
+# globally updates the ack num (what it expects next in the sequence)
+# Accumulative Acknowledgement
 def update_expected_seq_num(pkt):
     global receiver_buffer
     global expected_seq_num
-
 
     list_of_keys = sorted(receiver_buffer.keys())
     print("determining expected seq num from here", list_of_keys)
@@ -186,8 +185,16 @@ def deserialize_packet(packet):
 
 
 # writes the file from the buffer
-def convertBufferToFile():
-    return None
+def convert_buffer_to_file():
+    global filename
+    global receiver_buffer
+
+    f = open(filename, "wb")
+    data_stream = receiver_buffer.values()
+
+    for data in data_stream:
+        f.write(data)
+
 
 # always give thsi function a SERIALIZED PACKET
 def add_to_log(packet, time, direction):
@@ -209,12 +216,9 @@ def add_to_log(packet, time, direction):
 
 def create_log():
     global log
-
     with open('receiver_log.txt', 'w') as f:
         for logs in log:
             print(logs.list_attr())
-
-
 
 
 main()
