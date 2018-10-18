@@ -1,10 +1,10 @@
-# https://realpython.com/python-sockets/
 import socket
 import threading
 from packet import packet
-import pickle
 import sys
 import time
+from utils import serialize_packet, deserialize_packet
+from logger import *
 
 # argument check
 if len(sys.argv) != 3:
@@ -21,17 +21,20 @@ filename = sys.argv[2]
 receiver_buffer = {}
 CONNECTION_STATE = "CLOSED"
 expected_seq_num = 0
-receiver_buffer = {}  #contains the seq_num and payload (not packet)
-receiver_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) # this should mess it up?
+receiver_buffer = {}
+receiver_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 receiver_socket.bind(hostport)
 
 # Logger
 log = []
+overall_timer = None
 
 
 def main():
+    overall_timer = time.time() 
     while True:
         data, address = receiver_socket.recvfrom(4000)
+        add_to_log(data, "rcv")
         deserialize = deserialize_packet(data)
 
         if deserialize.get_packet_type() != "FIN":
@@ -50,6 +53,7 @@ def handle_connection(deserialize, address):
     if pkt is not None:
         pkt = serialize_packet(pkt)
         newSocket.sendto(pkt, address)
+        add_to_log(pkt, "snd")
 
 
 # we have to send two packets in a row
@@ -60,20 +64,28 @@ def finish_connection(deserialize, address):
     seq_num = deserialize.get_seq_num()
 
     ACK = packet("ACK", 1, seq_num + 1)
-    FIN = packet("FIN", seq_num + 1, 1)
+    FIN = packet("FIN", 1, seq_num + 1)
 
-    newSocket.sendto(serialize_packet(ACK), address)
+    serialize_ack = serialize_packet(ACK)
+    newSocket.sendto(serialize_ack, address)
+    add_to_log(serialize_ack, "snd")
     time.sleep(2)
-    newSocket.sendto(serialize_packet(FIN), address)
+
+    serialize_fin = serialize_packet(FIN)
+    newSocket.sendto(serialize_fin, address)
+    add_to_log(serialize_fin, "snd")
 
     while True:
         data, address = receiver_socket.recvfrom(4000)
+        add_to_log(data, "rcv")
         deserialize = deserialize_packet(data)
         convert_buffer_to_file()
         break
 
+    create_log()
     print("FINISHED")
     sys.exit(0)
+
 
 # creates a packet 
 def process_packet(pkt):
@@ -163,62 +175,56 @@ def packet_length(seq_num):
 
 def add_to_buffer(pkt):
     global receiver_buffer
-
     list_of_keys = receiver_buffer.keys()
     if pkt.seq_num not in list_of_keys:
         print("adding into buffer", pkt.seq_num)
         receiver_buffer[pkt.seq_num] = pkt.payload
         # instead of sorting it here, we sort everytime we check the list
 
-# TODO
-def buffer_to_output():
-    global filename
-
-# serelize right before sending any packet
-def serialize_packet(packet):
-    return pickle.dumps(packet)
-
-
-# desereliaze as soon as we received a packet
-def deserialize_packet(packet):
-    return pickle.loads(packet)
-
-
 # writes the file from the buffer
 def convert_buffer_to_file():
     global filename
     global receiver_buffer
 
+    list_of_keys = list(receiver_buffer.keys())
+    sort_list = sorted(list_of_keys)
+
     f = open(filename, "wb")
-    data_stream = receiver_buffer.values()
 
-    for data in data_stream:
-        f.write(data)
-
+    for i in sort_list:
+        f.write(receiver_buffer.get(i))
 
 # always give thsi function a SERIALIZED PACKET
-def add_to_log(packet, time, direction):
+def add_to_log(packet, direction):
+    global overall_timer
     global log
+
     pkt = deserialize_packet(packet)
-    #def __init__(self, direction, time, type, seq_num, data_size, ack_num):
     pkt_type = pkt.get_packet_type()
     seq_num = pkt.get_seq_num()
+    ack_num = pkt.get_ack_num()
+
+    # time calculation
+    if not overall_timer:
+        total_time = 0
+    else:
+        timestamp = time.time()
+        total_time = timestamp - overall_timer
 
     if pkt.get_payload() is None:
         data_size = 0
     else:
         data_size = pkt.payload_size()
-    ack_num = pkt.get_ack_num()
-    new = logger(direction, time, pkt_type, seq_num, data_size, ack_num)
-    new.print_logger()
+    new = logger(direction, total_time, pkt_type, seq_num, data_size, ack_num)
     log.append(new)
 
 
 def create_log():
     global log
+
     with open('receiver_log.txt', 'w') as f:
         for logs in log:
-            print(logs.list_attr())
+            f.write("%s\n" % logs.list_attr())
 
 
 main()

@@ -1,50 +1,36 @@
-<logger.logger object at 0x1045cde48>
-<logger.logger object at 0x1045ec6a0>
-<logger.logger object at 0x1045e8c88>
-<logger.logger object at 0x1045e8dd8>
-<logger.logger object at 0x1046cff98>
-<logger.logger object at 0x1045ec6d8>
-<logger.logger object at 0x1046cfeb8>
-<logger.logger object at 0x1046cfe48>
-<logger.logger object at 0x104620c88>
-<logger.logger object at 0x1046cff60>
-<logger.logger object at 0x1046d81d0>
-<logger.logger object at 0x1045cde80>
-<logger.logger object at 0x1046d8278>
-<logger.logger object at 0x1045e8cf8>
-<logger.logger object at 0x1046d8320>
-<logger.logger object at 0x1045e8c18>
-<logger.logger object at 0x1046d83c8>
-<logger.logger object at 0x1045e85f8>
-<logger.logger object at 0x1046d8470>
-<logger.logger object at 0x1045e8ac8>
-<logger.logger object at 0x1046cff28>
-<logger.logger object at 0x1045e8518>
-<logger.logger object at 0x1045e8cc0>
-<logger.logger object at 0x1046d8630>
-<logger.logger object at 0x1045e8f60>
-<logger.logger object at 0x1046d8710>
-<logger.logger object at 0x1046d86d8>
-<logger.logger object at 0x1046cfa58>
-<logger.logger object at 0x1046d87f0>
-<logger.logger object at 0x1046cfa90>
-<logger.logger object at 0x1046d8898>
-<logger.logger object at 0x1046cfac8>
-<logger.logger object at 0x1046d8940>
-<logger.logger object at 0x1046cfb00>
-<logger.logger object at 0x1046d89e8>
-<logger.logger object at 0x1046cfb38>
-<logger.logger object at 0x1046d8a90>
-<logger.logger object at 0x1046cfb70>
-<logger.logger object at 0x1046d8b38>
-<logger.logger object at 0x1046cfba8>
-<logger.logger object at 0x1046d8be0>
-<logger.logger object at 0x1046cfbe0>
-<logger.logger object at 0x1046d8c88>
-<logger.logger object at 0x1046cfc18>
-<logger.logger object at 0x1046d8d30>
-<logger.logger object at 0x1046cfc50>
-<logger.logger object at 0x1046d8dd8>
-<logger.logger object at 0x1046cfcf8>
-<logger.logger object at 0x1046cfd30>
-<logger.logger object at 0x1046d8e80>
+['snd', 0, 'SYN', 0, 0, 0]
+['rcv', 0, 'SYNACK', 0, 0, 1]
+['snd', 0, 'ACK', 1, 0, 1]
+['drop', 0.3058760166168213, 'DATA', 1, 300, 1]
+['drop', 0.6073668003082275, 'DATA', 301, 300, 1]
+['snd', 1.8119380474090576, 'DATA', 1, 300, 1]
+['snd', 1.8124001026153564, 'DATA', 301, 300, 1]
+['rcv', 1.813431978225708, 'ACK', 1, 0, 301]
+['rcv', 1.8137710094451904, 'ACK', 1, 0, 601]
+['snd', 1.8147099018096924, 'DATA', 601, 300, 1]
+['rcv', 1.8152451515197754, 'ACK', 1, 0, 901]
+['snd', 2.116811990737915, 'DATA', 901, 300, 1]
+['rcv', 2.1174190044403076, 'ACK', 1, 0, 1201]
+['snd', 2.4206950664520264, 'DATA', 1201, 300, 1]
+['rcv', 2.4214510917663574, 'ACK', 1, 0, 1501]
+['drop', 2.724174976348877, 'DATA', 1501, 300, 1]
+['snd', 3.027867078781128, 'DATA', 1801, 300, 1]
+['rcv', 3.02868390083313, 'ACK', 1, 0, 1501]
+['snd', 3.320657968521118, 'DATA', 1501, 300, 1]
+['snd', 3.3211190700531006, 'DATA', 1801, 300, 1]
+['rcv', 3.3216729164123535, 'ACK', 1, 0, 2101]
+['snd', 3.328813076019287, 'DATA', 2101, 300, 1]
+['rcv', 3.3297550678253174, 'ACK', 1, 0, 2401]
+['drop', 3.630995035171509, 'DATA', 2401, 300, 1]
+['snd', 4.83272385597229, 'DATA', 2401, 300, 1]
+['rcv', 4.833763122558594, 'ACK', 1, 0, 2701]
+['drop', 4.836621999740601, 'DATA', 2701, 300, 1]
+['snd', 6.342022180557251, 'DATA', 2701, 300, 1]
+['rcv', 6.342970132827759, 'ACK', 1, 0, 3001]
+['drop', 6.354547023773193, 'DATA', 3001, 28, 1]
+['snd', 7.859513998031616, 'DATA', 3001, 28, 1]
+['rcv', 7.860411882400513, 'ACK', 1, 0, 3029]
+['snd', 7.872618913650513, 'FIN', 3029, 0, 1]
+['rcv', 7.8730809688568115, 'ACK', 1, 0, 3030]
+['rcv', 9.878726243972778, 'FIN', 1, 0, 3030]
+['snd', 9.879081010818481, 'ACK', 3030, 0, 2]

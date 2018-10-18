@@ -17,4 +17,4 @@ class logger:
     # returns a list of the attribute values
     def list_attr(self):
         dictionary = vars(self)
-        return dictionary.values()
+        return list(dictionary.values())
