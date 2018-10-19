@@ -1,9 +1,11 @@
-#COMP3331
-# packet.py acts as the HEADER FILE
+"""Packet.py on Python3.6.3.
 
+Kevin Huang (z3461590) 3331_ass1
+
+Stores packet information
+
+"""
 class packet:
-
-    # instantiates a new packet, sort of like a constructor in java
     def __init__(self, packet_type, seq_num, ack_num):
         self.packet_type = packet_type
         self.seq_num = seq_num

@@ -1,10 +1,7 @@
-import logging # probably wont be using this
-
-
 class logger:
 
     def __init__(self, direction, time, type, seq_num, data_size, ack_num):
-        self.direction = direction #snd/rcv
+        self.direction = direction  #snd/rcv
         self.time = time
         self.type = type # S, SA, A, D
         self.seq_num = seq_num

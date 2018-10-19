@@ -1,6 +1,5 @@
 import random
 
-# possible outcomes
 DROP_PACKET = 1
 DUPLICATE = 2
 CORRUPT = 3
