@@ -1,14 +1,6 @@
 #COMP3331
 # packet.py acts as the HEADER FILE
 
-# consider using flags for this?
-SYN = 0b0001
-ACK = 0b0010
-SYNACK = 0b0011
-FIN = 0b0100
-DATA = 0b1000
-
-
 class packet:
 
     # instantiates a new packet, sort of like a constructor in java
@@ -21,7 +13,6 @@ class packet:
 
     def set_seq_num(self, num):
         self.seq_num = num
-
 
     def set_ack_num(self, num):
         self.ack_num = num 
@@ -39,7 +30,7 @@ class packet:
         self.payload = data
 
     def get_payload(self):
-        return self.payload    
+        return self.payload
 
     def print_packet_data(self):
         print(vars(self))
@@ -54,14 +45,7 @@ class packet:
         return self.checksum
 
     def corrupt(self):
-        self.checksum = 1  # use bits instead of a flag deal with later
+        self.checksum = 1 
 
     def uncorrupt(self):
         self.checksum = 0
-
-    # useful for logging
-
-
-    def list_details():
-        self.test = 0
-

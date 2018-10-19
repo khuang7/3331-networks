@@ -27,15 +27,19 @@ receiver_socket.bind(hostport)
 
 # Logger
 log = []
-log_summary = {}
+overall_logger = overall_receiver_logger()
 overall_timer = None
 
 
 def main():
-    overall_timer = time.time() 
+    global overall_timer 
+    global overall_logger
+    overall_timer = time.time()
+    
     while True:
         data, address = receiver_socket.recvfrom(4000)
         add_to_log(data, "rcv")
+        overall_logger.increment_field("total_segments")
         deserialize = deserialize_packet(data)
 
         if deserialize.get_packet_type() != "FIN":
@@ -114,8 +118,8 @@ def process_packet(pkt):
         return None
     # packet should be a data packet
     else:
-        # this is where i do the checksum
         if (pkt.get_corrupt() == 1):
+            overall_logger.increment_field("bit_errors")
             print("corrupt packet send nothing back")
             return None
         elif (pkt.seq_num in receiver_buffer.keys()):
@@ -223,12 +227,31 @@ def add_to_log(packet, direction):
 
 def create_log():
     global log
+    global receiver_buffer
+    global overall_logger
 
+    overall_logger.update_field("size_of_file", calculate_size())
+    overall_logger.update_field("data_segments", len(receiver_buffer.keys()))
+
+    overall_logger_dict = overall_logger.get_dict()
     with open('receiver_log.txt', 'w') as f:
         for logs in log:
-            f.write("%s\n" % logs.list_attr())
+            f.write(' '.join(str(i) for i in logs.list_attr()))
+            f.write("\n")
+            #f.write("%s\n" % logs.list_attr())
+
+        f.write("\n\n============SUMMARY============\n")
+        for itr in overall_logger_dict.keys():
+            f.write("%s: %d\n" % (itr, overall_logger_dict[itr]))
+        f.write("\n===========================================")
+    # final updates before adding
 
 
-
+def calculate_size():
+    global receiver_buffer
+    i = 0
+    for keys in list(receiver_buffer.keys()):
+        i = i + len(receiver_buffer.get(keys))
+    return i
 
 main()

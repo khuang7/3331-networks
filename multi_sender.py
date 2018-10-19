@@ -141,6 +141,7 @@ def receive_packets(stopper):
         if (stopper in acks_received):
             print("RECEIVER_THREAD_STOP")
             return  # stop the thread
+        
         if packets_to_send is None:
             return
         try:
@@ -162,6 +163,8 @@ def process_packet(packet):
     global last_data_byte_stream
     global timestamper
 
+    duplicates = []
+
     pkt = deserialize_packet(packet)
     ack_num = pkt.get_ack_num()
     pkt_type = pkt.get_packet_type()
@@ -177,11 +180,13 @@ def process_packet(packet):
 
     if pkt_type == "ACK":
         last_ack_received = ack_num
+        
+        duplicates.append(ack_num)
+
         if (ack_num not in acks_received):
             acks_received.append(ack_num)
             window.remove(pop_off)
-
-            # receiver a packet and update the timeout based on the RTT
+             # receiver a packet and update the timeout based on the RTT
             if (ack_num in list(timestamper.keys())):
                 sampleRTT = time.time() - timestamper.get(ack_num)
                 # update_timeout(sampleRTT)
@@ -192,6 +197,18 @@ def process_packet(packet):
                 if (window):
                     timer = threading.Thread(target=single_timer, args=(timeout, seq_num))
                     timer.start()
+
+        # duplciates will go in here
+        else:
+            if ack_num in duplicates:
+                duplicates.append(ack_num)
+            else:
+                del duplicates[:]
+            
+            if (len(duplicates)):
+                # FAST RETRANSMIT
+                send_packet(packet, 1)
+
     else:
         pass
 
@@ -272,6 +289,10 @@ def send_packet(packet, PLD):
         packet.corrupt()
     if PLD != 3:
         packet.uncorrupt()  # refactor this later
+
+    if PLD == 5:
+        # delay by waiting a certain time between 0 and max delay
+        time.sleep(random.random(0, maxDelay))
 
     global window
     global timer_active
