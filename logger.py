@@ -1,6 +1,5 @@
 import logging # probably wont be using this
 
-# make an instance of this class, and keep a list
 
 class logger:
     def __init__(self, direction, time, type, seq_num, data_size, ack_num):

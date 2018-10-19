@@ -27,6 +27,7 @@ receiver_socket.bind(hostport)
 
 # Logger
 log = []
+log_summary = {}
 overall_timer = None
 
 
@@ -208,6 +209,7 @@ def add_to_log(packet, direction):
     if not overall_timer:
         total_time = 0
     else:
+
         timestamp = time.time()
         total_time = timestamp - overall_timer
 
@@ -225,6 +227,8 @@ def create_log():
     with open('receiver_log.txt', 'w') as f:
         for logs in log:
             f.write("%s\n" % logs.list_attr())
+
+
 
 
 main()

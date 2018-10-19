@@ -85,20 +85,25 @@ def send_file():
     receiving_thread.start()
     # keep sending until the file is fully sent
     while file_not_sent:
+
+        print ("EVERY ITERATION")
+        print ("chooses a packet to send from this list")
+        print_dict_packets(packets_to_send)
+        print("also looking at acks_received", acks_received)
+
         if acks_received:
             highest_ack = sorted(acks_received)[-1]
             update_packetstosend(highest_ack)
         # checker for the global variables
 
         if not packets_to_send:  # TODO: fix the way its count later
-            print("FINISHED")
+            print("FINISHED SENDING FILE")
             return  # goes to close file
 
         # my code dies without giving it some time to check between packets
-        time.sleep(0.3)
+        #time.sleep(0.3)
 
         if len(window) >= (MWS / MSS):
-            print("FULL WINDOW")
             continue
 
         global PLD_list
@@ -115,8 +120,6 @@ def send_file():
 def update_window():
     global acks_received
     global window
-
-    print ("what are the acks we have now", acks_received)
     # since we are using accumulative acknolwedgement
     if acks_received:
         highest_ack = sorted(acks_received)[-1]
@@ -136,15 +139,13 @@ def receive_packets(stopper):
         global timestamper
 
         if (stopper in acks_received):
-            print("the thread should have stopped now")
+            print("RECEIVER_THREAD_STOP")
             return  # stop the thread
         if packets_to_send is None:
             return
         try:
             packet, server = sender_socket.recvfrom(4096)
             add_to_log(packet, "rcv")
-            print (" -------------------------RECEIVED PACKET ")
-            deserialize_packet(packet).simple_print()
             process_packet(packet)
         except:
             pass
@@ -177,7 +178,6 @@ def process_packet(packet):
     if pkt_type == "ACK":
         last_ack_received = ack_num
         if (ack_num not in acks_received):
-            print("add to acks_received", ack_num)
             acks_received.append(ack_num)
             window.remove(pop_off)
 
@@ -198,47 +198,32 @@ def process_packet(packet):
 
 # accumlatively deletes packets to send
 def update_packetstosend(ack_num):
-    print ("ack num from receiver", ack_num)
     global packets_to_send
-    print("total list", packets_to_send.keys())
     for i in list(packets_to_send.keys()): 
-        print ("comparing with", i)
         if (i < ack_num):
-            print("popped of", i)
             packets_to_send.pop(i)
         if (i > ack_num):
             break
 
 # returns the next packet to send
 # algorithm determine what the next packet should be sent
-
-
-
-
 def choose_packet(packets_to_send):
 
-
+    # just incase the receiving thread somehow doesnt update in time
     if (not packets_to_send):
-        print("the list is empty")
         return None
 
     global window
     global acks_received
     global base # base of the window
 
-
-    print ("chooses a packet to send, chooses from this list")
-    print_dict_packets(packets_to_send)
-    print("also looking at acks_received", acks_received)
-
     list_of_keys = list(packets_to_send.keys())
 
     # if the window is empty just send first packet
     if (not window):
-        print ("window is empty so chooses the first thing in packets to send")
         index = list_of_keys[0]
-        print ("chooses packet at index", index)
         base = index
+        print("CHOOSE PACKET chose indexno:", index)
         return packets_to_send.get(index)
     # window contains something, so choose the first packet not in the window
     else:
@@ -247,6 +232,7 @@ def choose_packet(packets_to_send):
             if s not in window:
                 index = s
                 break
+        print("CHOOSE PACKET chose indexno:", index)        
         return packets_to_send.get(index)
 
 
@@ -262,12 +248,8 @@ def drop_packet(packet):
     global timeout
     global log
 
-    print (" -------------------------DROPPING PACKET ")
-    packet.simple_print()
-
     seq_num = packet.seq_num
     window.append(seq_num)
-
     serialize = serialize_packet(packet)
     add_to_log(serialize, "drop")
 
@@ -281,15 +263,13 @@ def drop_packet(packet):
 # sends the actual data packet
 # also passes in the PLD to determine what happens to the packet
 def send_packet(packet, PLD):
-
     # drop packet
     if PLD == 1:
         drop_packet(packet)
         return
-
+    # corrupt packet
     if PLD == 3:
         packet.corrupt()
-
     if PLD != 3:
         packet.uncorrupt()  # refactor this later
 
@@ -305,14 +285,8 @@ def send_packet(packet, PLD):
     if (seq_num not in window):
         window.append(seq_num)
 
-    # this will limit what we send (so if we know we already have an ack)
-    # we dont have to send it again
-    # seq_num is the next packet
     if (seq_num + payload_size in acks_received):
         return
-
-    print (" -------------------------SENDING PACKET ")
-    packet.simple_print()
 
     serialize = serialize_packet(packet)
     sender_socket.sendto(serialize, hostport)
@@ -338,8 +312,6 @@ def single_timer(timeout, seq_num):
         print ("RESENDING WINDOW!!")
         for i in window:
             if (i in packets_to_send):
-                print("something has been resent")
-                # generate a new PLD again
                 send_packet(packets_to_send.get(i), 6)
     timer_active = None  # reset timer
 
@@ -395,11 +367,7 @@ def send_syn(packet):
     serialize = serialize_packet(packet)
     try:
         sender_socket.sendto(serialize, hostport)
-        check = deserialize_packet(serialize)
         add_to_log(serialize, "snd")
-        CONNECTION_STATE = "SYN_SENT"
-        # waiting for an ack acknowledgement
-        # after a certain time period of timeout (no need for handshake)
         while True:
             try:
                 packet, server = sender_socket.recvfrom(4096)
